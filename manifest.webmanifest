@@ -1,0 +1,17 @@
+{
+  "name": "词汇助手 · 六级/雅思/听力语料",
+  "short_name": "词汇助手",
+  "description": "六级词汇闪过 / 雅思词汇真经 / 王陆听力语料库：看词打意、听音写意、错题本",
+  "lang": "zh-CN",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f6f7fb",
+  "theme_color": "#4f46e5",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>词汇助手 · 六级/雅思背单词</title>
+<meta name="theme-color" content="#4f46e5">
+<meta name="description" content="六级词汇闪过 / 雅思词汇真经 / 王陆听力语料库：看词打意、听音写意、错题本">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="词汇助手">
+<link rel="stylesheet" href="css/style.css?v=34">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">📚 词汇助手 <span class="brand-sub">六级 · 雅思</span></div>
+  <nav class="tabs" id="navTabs">
+    <button class="tab" data-view="dashboard">首页</button>
+    <button class="tab" data-view="books">词库</button>
+    <button class="tab" data-view="study">学习</button>
+    <button class="tab" data-view="test">测试</button>
+    <button class="tab" data-view="errors">错题本</button>
+    <button class="tab" data-view="settings">设置</button>
+  </nav>
+  <div class="topbar-right"><button id="themeToggle" class="icon-btn" title="切换主题">🌙</button></div>
+</header>
+<main id="app" class="container"></main>
+<div id="modalRoot"></div>
+<div id="toastRoot"></div>
+<script src="js/data.js?v=34"></script>
+<script src="js/wanglu_data.js?v=34"></script>
+<script src="js/store.js?v=34"></script>
+<script src="js/cloud.js?v=34"></script>
+<script src="js/speech.js?v=34"></script>
+<script src="js/importer.js?v=34"></script>
+<script src="js/ui.js?v=34"></script>
+<script src="js/views.js?v=34"></script>
+<script src="js/app.js?v=34"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js').catch(function () {});
+  });
+}
+</script>
+</body>
+</html>
