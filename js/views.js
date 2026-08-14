@@ -612,9 +612,9 @@ const Views = (function () {
 
     html += '<div class="section-title"><h2>☁️ 云同步（手机 ↔ 电脑）</h2></div>';
     html += '<div class="card form-card">';
-    html += '<p class="muted small">用免费的 Supabase 存一份云端进度，手机和电脑都能同步。首次使用：先在一台设备「⬆️ 上传进度」，再在另一台「⬇️ 下载进度」；之后可勾选自动同步。</p>';
+    html += '<p class="muted small">用免费的 Supabase 存一份云端进度，手机和电脑都能同步。首次使用：先在一台设备「⬆️ 上传进度」，再在另一台「⬇️ 下载进度」；之后可勾选自动同步。<b>密钥请填 sb_publishable_ 开头的公钥（不要填 sb_secret_ 密钥）</b>。</p>';
     html += '<div class="form-group"><label>项目地址（Project URL）</label><input class="input" id="clServer" placeholder="https://xxxx.supabase.co"></div>';
-    html += '<div class="form-group"><label>anon 公钥（anon public key）</label><input class="input" id="clAppKey" type="password" placeholder="eyJ...（Supabase 设置→API 里复制）"></div>';
+    html += '<div class="form-group"><label>anon 公钥（anon public key）</label><input class="input" id="clAppKey" type="password" placeholder="sb_publishable_...（Supabase 设置→API 里复制）"></div>';
     html += '<div class="form-group"><label>同步口令（自己起一个，比如英文名+日期，两边填一样）</label><input class="input" id="clKey" placeholder="例如 my2026"></div>';
     html += '<div class="form-group"><label class="check"><input type="checkbox" id="clAuto"> 自动同步（打开网站时自动下载较新的，学习时自动上传）</label></div>';
     html += '<div class="btn-row">';

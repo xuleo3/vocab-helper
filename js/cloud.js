@@ -24,17 +24,38 @@ const CloudSync = (function () {
   function base(c) {
     return String(c.server).replace(/\/+$/, '') + '/rest/v1/sync_data';
   }
+  function fetchTO(url, opts, timeoutMs) {
+    const ctrl = new AbortController();
+    const t = setTimeout(function () { ctrl.abort(); }, timeoutMs || 15000);
+    return fetch(url, Object.assign({}, opts, { signal: ctrl.signal })).then(function (r) {
+      clearTimeout(t);
+      return r;
+    }, function (e) {
+      clearTimeout(t);
+      throw e;
+    });
+  }
   async function req(url, opts) {
-    let r;
-    try {
-      r = await fetch(url, opts);
-    } catch (e) {
-      throw new Error('网络错误：' + e.message + '（请检查项目地址和网络）');
+    let r = null;
+    let lastErr = null;
+    // 失败自动重试 1 次（网络抖动常见）
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        r = await fetchTO(url, opts, 15000);
+        break;
+      } catch (e) {
+        lastErr = e;
+        if (e && e.name === 'AbortError') lastErr = new Error('连接超时（15秒）');
+      }
+    }
+    if (!r) {
+      throw new Error('网络错误：' + (lastErr ? lastErr.message : '未知') + '（请检查网络；密钥请填 sb_publishable_ 开头的公钥，不是 sb_secret_ 密钥）');
     }
     if (!r.ok) {
       let txt = '';
       try { txt = (await r.text()).slice(0, 200); } catch (e) {}
-      throw new Error('HTTP ' + r.status + '：' + txt);
+      const hint = r.status === 401 ? '（密钥不对：请填 sb_publishable_ 开头的公钥，不是 sb_secret_ 密钥）' : '';
+      throw new Error('HTTP ' + r.status + hint + '：' + txt);
     }
     let j = null;
     try { j = await r.json(); } catch (e) { j = null; }
