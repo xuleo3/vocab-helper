@@ -565,6 +565,19 @@ const App = (function () {
         bindCloud();
       }).catch(function (e) { UI.toast('上传失败：' + e.message, 'error'); });
     },
+    'cloud-sync-now': function () {
+      const st = Store.getState();
+      if (!(st.sync && st.sync.lastSavedAt > 0)) {
+        UI.toast('第一次同步请到「设置 → 云同步」选择「上传」或「下载」', 'error'); return;
+      }
+      UI.toast('正在同步…');
+      CloudSync.sync().then(function (res) {
+        if (res === 'pulled') { UI.toast('已下载最新进度 ☁️'); App.render(); }
+        else if (res === 'pushed') { UI.toast('已上传进度 ☁️'); }
+        else { UI.toast('两边已是最新 ✓'); }
+      }).catch(function (e) { UI.toast('同步失败：' + e.message, 'error'); });
+    },
+    'goto-settings-cloud': function () { go('settings'); },
     'cloud-pull': function () {
       const cfg = cloudCfgFromForm();
       Store.setCloud(cfg);

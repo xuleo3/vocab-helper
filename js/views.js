@@ -43,6 +43,18 @@ const Views = (function () {
       '<button class="card action-card" data-action="goto-import">➕ 导入单词本</button>' +
       '</div>';
 
+    // 云同步状态
+    const cloudCfg = Store.getCloud();
+    if (cloudCfg && cloudCfg.server && cloudCfg.appKey && cloudCfg.syncKey) {
+      const lastAt = (Store.getState().sync && Store.getState().sync.lastSavedAt) || 0;
+      html += '<div class="section-title"><h2>☁️ 云同步</h2></div>';
+      html += '<div class="card">';
+      html += '<div class="muted small">' + (lastAt ? '上次同步：' + fmtTime(lastAt) : '还没同步过（请到「设置 → 云同步」先上传或下载一次）') + (cloudCfg.auto ? ' · 自动同步已开启 ✓' : ' · 自动同步未开启（可在设置里打开）') + '</div>';
+      html += '<div class="btn-row"><button class="btn btn-sm btn-primary" data-action="cloud-sync-now">🔄 立即同步</button>';
+      html += '<button class="btn btn-sm" data-action="goto-settings-cloud">⚙️ 云同步设置</button></div>';
+      html += '</div>';
+    }
+
     // 最近动态
     html += '<div class="section-title"><h2>最近动态</h2></div>';
     if (!s.activity.length) html += '<p class="muted">暂无动态。完成一次测试后这里会显示记录。</p>';
