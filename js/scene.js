@@ -265,11 +265,11 @@ const SceneViews = (function () {
     const on = !!(SceneStore.getState().important.words[w.id]);
     return '<button class="btn btn-sm star-btn' + (on ? ' on' : '') + '" data-scene-action="scene-toggle-important" data-wid="' + esc(w.id) + '">' + (on ? '★ 已在重要本' : '☆ 加入重要本') + '</button>';
   }  function scenePhoto(src, emoji, cls) {
-    return '<span class="wiki-img-wrap ' + (cls || '') + '"><span class="wiki-img-fallback">' + emoji + '</span><img class="wiki-img" src="' + esc(src) + '" alt="" loading="lazy" onerror="this.style.display=\'none\'"></span>';
+    return '<span class="wiki-img-wrap ' + (cls || '') + '"><span class="wiki-img-fallback">' + emoji + '</span><img class="wiki-img" src="' + esc(src) + '" alt="" loading="lazy" onload="this.previousElementSibling.style.display=\'none\'" onerror="this.style.display=\'none\'"></span>';
   }
 
   function wordPhoto(en, emoji) {
-    return '<div class="scene-flash-photo"><span class="scene-flash-emoji">' + emoji + '</span><img class="scene-word-photo" data-pexels="' + esc(en) + '" alt="" onerror="this.style.display=\'none\'"></div>';
+    return '<div class="scene-flash-photo"><span class="scene-flash-emoji">' + emoji + '</span><img class="scene-word-photo" data-pexels="' + esc(en) + '" alt="" onload="this.previousElementSibling.style.display=\'none\'" onerror="this.style.display=\'none\'"></div>';
   }
 
   function home() {
@@ -563,23 +563,29 @@ const SceneViews = (function () {
   function loadWordPhotos() {
     if (typeof fetch !== 'function') return;
     const key = SceneStore.getPexelsKey();
-    if (!key) return;
     let cache = {};
     try { cache = JSON.parse(localStorage.getItem('scene_pexels_cache') || '{}'); } catch (e) {}
     document.querySelectorAll('img.scene-word-photo[data-pexels]').forEach(function (img) {
       const q = img.getAttribute('data-pexels');
       if (!q) return;
-      if (cache[q]) { img.onload = function () { img.style.display = ''; }; img.src = cache[q]; return; }
-      const url = 'https://api.pexels.com/v1/search?query=' + encodeURIComponent(q) + '&per_page=1&orientation=square';
-      fetch(url, { headers: { 'Authorization': key } }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
-        if (j && j.photos && j.photos[0] && j.photos[0].src && j.photos[0].src.medium) {
-          const src = j.photos[0].src.medium;
-          cache[q] = src;
-          try { localStorage.setItem('scene_pexels_cache', JSON.stringify(cache)); } catch (e) {}
-          img.onload = function () { img.style.display = ''; };
-          img.src = src;
-        }
-      }).catch(function () {});
+      const show = function (src) {
+        cache[q] = src;
+        try { localStorage.setItem('scene_pexels_cache', JSON.stringify(cache)); } catch (e) {}
+        img.onload = function () { img.style.display = ''; if (img.previousElementSibling) img.previousElementSibling.style.display = 'none'; };
+        img.src = src;
+      };
+      if (cache[q]) { show(cache[q]); return; }
+      if (key) {
+        fetch('https://api.pexels.com/v1/search?query=' + encodeURIComponent(q) + '&per_page=1&orientation=square', { headers: { 'Authorization': key } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (j) { if (j && j.photos && j.photos[0] && j.photos[0].src && j.photos[0].src.medium) show(j.photos[0].src.medium); })
+          .catch(function () {});
+      } else {
+        fetch('https://en.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(q))
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (j) { if (j && j.thumbnail && j.thumbnail.source) show(j.thumbnail.source); })
+          .catch(function () {});
+      }
     });
   }
 
