@@ -323,3 +323,15 @@ code { background: var(--primary-soft); color: var(--primary); padding: 1px 6px;
 .scene-quiz-card .quiz-input { text-align: center; font-size: 22px; font-weight: 700; }
 .scene-quiz-card .quiz-verdict, .scene-quiz-card .quiz-your-answer, .scene-quiz-card .sense-item { text-align: left; }
 .scene-quiz-card .btn-row { justify-content: center; }
+
+
+/* ============ 生活场景 · 真实配图 ============ */
+.scene-card { flex-direction: column; align-items: stretch; padding: 0; overflow: hidden; }
+.scene-card-photo { display: block; width: 100%; height: 150px; border: none; background: var(--bg); padding: 0; cursor: pointer; position: relative; }
+.scene-card-title { display: block; width: 100%; border: none; background: transparent; color: var(--text); text-align: left; font-weight: 800; font-size: 16px; padding: 0; margin: 12px 0 2px; cursor: pointer; }
+.scene-card-title:hover { color: var(--primary); }
+.scene-card-body { padding: 0 14px 14px; }
+.scene-banner { width: 100%; height: 200px; border-radius: var(--radius); overflow: hidden; margin: 4px 0 12px; border: 1px solid var(--border); background: var(--bg); }
+.wiki-img-wrap { position: relative; display: block; width: 100%; height: 100%; }
+.wiki-img-fallback { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 52px; }
+.wiki-img { display: block; width: 100%; height: 100%; object-fit: cover; position: relative; }

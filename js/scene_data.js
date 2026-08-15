@@ -5,7 +5,7 @@
 // ============================================================
 window.SCENE_VERSION = 1;
 window.SCENE_BOOKS = [
-  { id:"traffic", name:"交通出行", icon:"🚗", words:[
+  { id:"traffic", name:"交通出行", icon:"🚗",wiki:"Traffic", words:[
     ["car","小汽车","🚗","n."],
     ["jeep","吉普车；越野车","🚙","n."],
     ["SUV","运动型多用途车","🚙","n."],
@@ -37,7 +37,7 @@ window.SCENE_BOOKS = [
     ["wheel","车轮","🛞","n."],
     ["station","车站","🚉","n."]
   ]},
-  { id:"home", name:"居家物品", icon:"🏠", words:[
+  { id:"home", name:"居家物品", icon:"🏠",wiki:"Furniture", words:[
     ["house","房子","🏠","n."],
     ["door","门","🚪","n."],
     ["window","窗户","🪟","n."],
@@ -69,7 +69,7 @@ window.SCENE_BOOKS = [
     ["axe","斧头","🪓","n."],
     ["light bulb","灯泡","💡","n."]
   ]},
-  { id:"food", name:"食物饮料", icon:"🍜", words:[
+  { id:"food", name:"食物饮料", icon:"🍜",wiki:"Food", words:[
     ["rice","米饭","🍚","n."],
     ["bread","面包","🍞","n."],
     ["noodle","面条","🍜","n."],
@@ -101,7 +101,7 @@ window.SCENE_BOOKS = [
     ["candy","糖果","🍬","n."],
     ["ice cream","冰淇淋","🍦","n."]
   ]},
-  { id:"fruitveg", name:"水果蔬菜", icon:"🍎", words:[
+  { id:"fruitveg", name:"水果蔬菜", icon:"🍎",wiki:"Vegetable", words:[
     ["apple","苹果","🍎","n."],
     ["banana","香蕉","🍌","n."],
     ["orange","橙子","🍊","n."],
@@ -131,7 +131,7 @@ window.SCENE_BOOKS = [
     ["pumpkin","南瓜","🎃","n."],
     ["sweet potato","红薯","🍠","n."]
   ]},
-  { id:"animals", name:"动物", icon:"🐶", words:[
+  { id:"animals", name:"动物", icon:"🐶",wiki:"Animal", words:[
     ["dog","狗","🐶","n."],
     ["cat","猫","🐱","n."],
     ["bird","鸟","🐦","n."],
@@ -163,7 +163,7 @@ window.SCENE_BOOKS = [
     ["penguin","企鹅","🐧","n."],
     ["owl","猫头鹰","🦉","n."]
   ]},
-  { id:"outdoors", name:"户外自然", icon:"🌳", words:[
+  { id:"outdoors", name:"户外自然", icon:"🌳",wiki:"Nature", words:[
     ["tree","树","🌳","n."],
     ["flower","花","🌸","n."],
     ["grass","草","🌿","n."],
@@ -187,7 +187,7 @@ window.SCENE_BOOKS = [
     ["field","田野","🌾","n."],
     ["sky","天空","🌌","n."]
   ]},
-  { id:"places", name:"建筑场所", icon:"🏙️", words:[
+  { id:"places", name:"建筑场所", icon:"🏙️",wiki:"Building", words:[
     ["school","学校","🏫","n."],
     ["hospital","医院","🏥","n."],
     ["bank","银行","🏦","n."],
@@ -222,7 +222,7 @@ window.SCENE_BOOKS = [
     ["canteen","食堂","🍽️","n."],
     ["scenic spot","景区","🏞️","n."]
   ]},
-  { id:"jobs", name:"职业人物", icon:"👷", words:[
+  { id:"jobs", name:"职业人物", icon:"👷",wiki:"Employment", words:[
     ["teacher","教师","👩🏫","n."],
     ["doctor","医生","🧑‍⚕️","n."],
     ["nurse","护士","👩‍⚕️","n."],
@@ -246,7 +246,7 @@ window.SCENE_BOOKS = [
     ["driver","司机","🚗","n."],
     ["sailor","水手","⚓","n."]
   ]},
-  { id:"clothing", name:"衣物穿戴", icon:"👕", words:[
+  { id:"clothing", name:"衣物穿戴", icon:"👕",wiki:"Clothing", words:[
     ["shirt","衬衫","👔","n."],
     ["T-shirt","T恤","👕","n."],
     ["coat","外套","🧥","n."],
@@ -272,7 +272,7 @@ window.SCENE_BOOKS = [
     ["wallet","钱包","👛","n."],
     ["ring","戒指","💍","n."]
   ]},
-  { id:"body", name:"身体部位", icon:"👀", words:[
+  { id:"body", name:"身体部位", icon:"👀",wiki:"Human body", words:[
     ["head","头","👤","n."],
     ["face","脸","😊","n."],
     ["eye","眼睛","👁️","n."],
@@ -292,7 +292,7 @@ window.SCENE_BOOKS = [
     ["blood","血液","🩸","n."],
     ["nail","指甲","💅","n."]
   ]},
-  { id:"study", name:"学习办公", icon:"📚", words:[
+  { id:"study", name:"学习办公", icon:"📚",wiki:"Stationery", words:[
     ["book","书","📖","n."],
     ["notebook","笔记本","📓","n."],
     ["pen","钢笔","🖊️","n."],
@@ -313,7 +313,7 @@ window.SCENE_BOOKS = [
     ["television","电视","📺","n."],
     ["envelope","信封","✉️","n."]
   ]},
-  { id:"sports", name:"运动健身", icon:"⚽", words:[
+  { id:"sports", name:"运动健身", icon:"⚽",wiki:"Sport", words:[
     ["football","足球","⚽","n."],
     ["basketball","篮球","🏀","n."],
     ["volleyball","排球","🏐","n."],

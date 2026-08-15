@@ -259,10 +259,14 @@ const SceneViews = (function () {
   function starBtn(w) {
     const on = !!(SceneStore.getState().important.words[w.id]);
     return '<button class="btn btn-sm star-btn' + (on ? ' on' : '') + '" data-scene-action="scene-toggle-important" data-wid="' + esc(w.id) + '">' + (on ? '★ 已在重要本' : '☆ 加入重要本') + '</button>';
-  }  function home() {
+  }  function wikiImg(title, emoji, cls) {
+    return '<span class="wiki-img-wrap ' + (cls || '') + '"><span class="wiki-img-fallback">' + emoji + '</span><img class="wiki-img" data-wiki="' + esc(title) + '" alt="" loading="lazy" style="display:none" onerror="this.style.display=\'none\'"></span>';
+  }
+
+  function home() {
     const scenes = SceneStore.getScenes();
     const st = SceneStore.overallStats();
-    let html = '<div class="page-head"><h1>🏞️ 生活场景 · 看图认词</h1><p class="muted">看图片认识生活中的常见事物，再测试能不能写出英文单词。这个板块与六级 / 雅思 / 王陆完全独立，互不影响。</p></div>';
+    let html = '<div class="page-head"><h1>🏞️ 生活场景 · 看图认词</h1><p class="muted">每个场景先「📖 学习」看图认识，再「🖼️ 测试」写英文单词。与六级 / 雅思 / 王陆完全独立，互不影响。</p></div>';
     html += '<div class="stat-grid">' + [
       { label: '场景', value: scenes.length, icon: '🗂️' },
       { label: '总词数', value: st.total, icon: '📖' },
@@ -278,14 +282,14 @@ const SceneViews = (function () {
     html += '<div class="scene-grid">' + scenes.map(function (sc) {
       const p = SceneStore.progress(sc.id);
       return '<div class="card scene-card">' +
-        '<div class="scene-card-icon">' + sc.icon + '</div>' +
+        '<button class="scene-card-photo" data-scene-action="scene-learn" data-scene="' + esc(sc.id) + '">' + wikiImg(sc.wiki, sc.icon) + '</button>' +
         '<div class="scene-card-body">' +
-        '<div class="book-title">' + esc(sc.name) + '</div>' +
+        '<button class="scene-card-title" data-scene-action="scene-learn" data-scene="' + esc(sc.id) + '">' + esc(sc.name) + '</button>' +
         '<div class="muted small">' + p.learned + ' / ' + p.total + ' 词 · 已掌握 ' + p.pct + '%</div>' +
         '<div class="progress"><div class="progress-bar" style="width:' + p.pct + '%"></div></div>' +
         '<div class="book-card-actions">' +
-        '<button class="btn btn-sm" data-scene-action="scene-learn" data-scene="' + esc(sc.id) + '">📖 学习</button>' +
-        '<button class="btn btn-sm btn-primary" data-scene-action="scene-test" data-scene="' + esc(sc.id) + '">🖼️ 测试</button>' +
+        '<button class="btn btn-sm btn-primary" data-scene-action="scene-learn" data-scene="' + esc(sc.id) + '">📖 学习</button>' +
+        '<button class="btn btn-sm" data-scene-action="scene-test" data-scene="' + esc(sc.id) + '">🖼️ 测试</button>' +
         '</div></div></div>';
     }).join('') + '</div>';
 
@@ -303,7 +307,8 @@ const SceneViews = (function () {
     if (!sc) return '<p class="muted">场景不存在。</p>';
     const words = SceneStore.getSceneWords(sceneId);
     let html = '<div class="page-head">';
-    html += '<div class="page-head-row"><h1>' + sc.icon + ' ' + esc(sc.name) + '</h1></div>';
+    html += '<div class="page-head-row"><h1>' + esc(sc.name) + '</h1></div>';
+    html += '<div class="scene-banner">' + wikiImg(sc.wiki, sc.icon) + '</div>';
     html += '<div class="btn-row">';
     html += '<button class="btn btn-sm" data-scene-action="scene-home">← 返回场景</button>';
     html += '<button class="btn btn-sm" data-scene-action="scene-mode" data-scene="' + esc(sceneId) + '" data-mode="browse"' + (mode === 'browse' ? ' disabled' : '') + '>列表浏览</button>';
@@ -536,8 +541,26 @@ const SceneViews = (function () {
     }
   }
 
+  function loadWikiImages() {
+    if (typeof fetch !== 'function') return;
+    document.querySelectorAll('img.wiki-img[data-wiki]').forEach(function (img) {
+      if (img.dataset.loaded) return;
+      img.dataset.loaded = '1';
+      const title = img.getAttribute('data-wiki');
+      if (!title) return;
+      const url = 'https://en.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(title);
+      fetch(url).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+        if (j && j.thumbnail && j.thumbnail.source) {
+          img.onload = function () { img.style.display = ''; };
+          img.src = j.thumbnail.source;
+        }
+      }).catch(function () {});
+    });
+  }
+
   function afterRender() {
     updateTestMode();
+    loadWikiImages();
     const input = document.getElementById('sceneQuizInput');
     if (input && current.view === 'quiz' && quiz && !quiz.revealed) input.focus();
   }
