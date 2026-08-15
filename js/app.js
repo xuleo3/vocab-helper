@@ -21,6 +21,7 @@ const App = (function () {
       case 'test': html = Views.test(current.params); break;
       case 'errors': html = Views.errors(); break;
       case 'settings': html = Views.settings(); break;
+      case 'admin': html = Views.admin(); break;
       case 'scene': html = (typeof SceneApp !== 'undefined') ? SceneApp.html() : '<p class="muted">生活场景加载失败</p>'; break;
       default: html = Views.dashboard();
     }
@@ -151,34 +152,34 @@ const App = (function () {
     }
   }
 
-  function bindCloud() {
-    const c = Store.getCloud() || {};
-    const srv = document.getElementById('clServer');
-    if (srv) srv.value = c.server || '';
-    const akey = document.getElementById('clAppKey');
-    if (akey) akey.value = c.appKey || '';
-    const k = document.getElementById('clKey');
-    if (k) k.value = c.syncKey || '';
+  async function bindCloud() {
     const au = document.getElementById('clAuto');
-    if (au) au.checked = !!(c.auto);
-    const st = document.getElementById('cloudStatus');
-    if (st) {
-      if (c.server && c.appKey && c.syncKey) {
-        const lastAt = (Store.getState().sync && Store.getState().sync.lastSavedAt) || 0;
-        st.textContent = '已配置。' + (lastAt ? '上次同步：' + new Date(lastAt).toLocaleString() : '还没做过首次同步，请先点「上传进度」或「下载进度」。');
-      } else {
-        st.textContent = '未配置云同步。';
-      }
+    if (au) {
+      au.checked = CloudSync.autoGet();
+      if (!au.dataset.bound) { au.dataset.bound = '1'; au.addEventListener('change', function () { CloudSync.autoSet(au.checked); UI.toast('已保存'); }); }
     }
-  }
-
-  function cloudCfgFromForm() {
-    const g = function (id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
-    const au = document.getElementById('clAuto');
-    return {
-      server: g('clServer'), appKey: g('clAppKey'),
-      syncKey: g('clKey'), auto: au ? au.checked : false
-    };
+    const st = document.getElementById('cloudStatus');
+    const loginWrap = document.getElementById('cloudLoginWrap');
+    const userWrap = document.getElementById('cloudUserWrap');
+    try {
+      const session = await CloudSync.getSession();
+      const email = (session && session.user) ? session.user.email : '';
+      const admin = CloudSync.isAdmin(session);
+      if (email) {
+        if (loginWrap) loginWrap.style.display = 'none';
+        if (userWrap) {
+          userWrap.style.display = '';
+          userWrap.innerHTML = '<p class="muted small">已登录：' + UI.esc(email) + (admin ? ' <span class="badge badge-other">管理员</span>' : '') + '</p>' + (admin ? '<div class="btn-row"><button class="btn btn-sm btn-primary" data-action="goto-admin">🔐 开发者管理（看全部进度）</button></div>' : '');
+        }
+        if (st) st.textContent = '已登录：' + email + (admin ? '（管理员）' : '');
+      } else {
+        if (loginWrap) loginWrap.style.display = '';
+        if (userWrap) { userWrap.style.display = 'none'; userWrap.innerHTML = ''; }
+        if (st) st.textContent = '未登录，注册或登录后即可云同步。';
+      }
+    } catch (e) {
+      if (st) st.textContent = '登录状态读取失败：' + e.message;
+    }
   }
 
   function fillUnitSelect(bookId) {
@@ -540,43 +541,36 @@ const App = (function () {
     'toggle-theme': function () { toggleTheme(); },
     'export-data': function () { exportData(); },
     'import-data': function () { importData(); },
-    'cloud-save': function () {
-      const cfg = cloudCfgFromForm();
-      if (!cfg.server || !cfg.appKey || !cfg.syncKey) {
-        UI.toast('请把项目地址、anon 密钥、同步口令都填上', 'error'); return;
-      }
-      Store.setCloud(cfg);
-      UI.toast('云同步设置已保存');
-      bindCloud();
-    },
-    'cloud-test': function () {
-      const cfg = cloudCfgFromForm();
-      Store.setCloud(cfg);
-      UI.toast('正在测试连接…');
-      CloudSync.test().then(function () {
-        UI.toast('连接成功 ✅ 设置已保存');
+    'cloud-signup': function () {
+      const email = (document.getElementById('clEmail') || {}).value.trim();
+      const pw = (document.getElementById('clPassword') || {}).value;
+      if (!email || !pw) { UI.toast('请填写邮箱和密码', 'error'); return; }
+      UI.toast('正在注册…');
+      CloudSync.signUp(email, pw).then(function () {
+        UI.toast('注册成功！请到邮箱点一下确认链接后再登录');
         bindCloud();
-      }).catch(function (e) { UI.toast('连接失败：' + e.message, 'error'); });
+      }).catch(function (e) { UI.toast(e.message, 'error'); });
+    },
+    'cloud-signin': function () {
+      const email = (document.getElementById('clEmail') || {}).value.trim();
+      const pw = (document.getElementById('clPassword') || {}).value;
+      if (!email || !pw) { UI.toast('请填写邮箱和密码', 'error'); return; }
+      UI.toast('正在登录…');
+      CloudSync.signIn(email, pw).then(function () {
+        UI.toast('登录成功 ✓');
+        bindCloud();
+      }).catch(function (e) { UI.toast(e.message, 'error'); });
+    },
+    'cloud-signout': function () {
+      CloudSync.signOut().then(function () { UI.toast('已退出登录'); bindCloud(); }).catch(function (e) { UI.toast('退出失败：' + e.message, 'error'); });
     },
     'cloud-push': function () {
-      const cfg = cloudCfgFromForm();
-      Store.setCloud(cfg);
       UI.toast('正在上传…');
       CloudSync.push().then(function (t) {
         UI.toast('已上传到云端 ☁️ ' + new Date(t).toLocaleTimeString());
-        bindCloud();
       }).catch(function (e) { UI.toast('上传失败：' + e.message, 'error'); });
     },
     'cloud-sync-now': function () {
-      if (document.getElementById('clServer')) {
-        const cfg = cloudCfgFromForm();
-        if (!cfg.server || !cfg.appKey || !cfg.syncKey) { UI.toast('请把项目地址、anon 密钥、同步口令都填上', 'error'); return; }
-        Store.setCloud(cfg);
-      }
-      const st = Store.getState();
-      if (!(st.sync && st.sync.lastSavedAt > 0)) {
-        UI.toast('第一次同步请到「设置 → 云同步」选择「上传」或「下载」', 'error'); return;
-      }
       UI.toast('正在同步…');
       CloudSync.sync().then(function (res) {
         if (res === 'pulled') { UI.toast('已下载最新进度 ☁️'); App.render(); }
@@ -586,16 +580,15 @@ const App = (function () {
     },
     'goto-settings-cloud': function () { go('settings'); },
     'cloud-pull': function () {
-      const cfg = cloudCfgFromForm();
-      Store.setCloud(cfg);
       UI.toast('正在下载…');
       CloudSync.pull().then(function (res) {
         if (res === 'applied') { UI.toast('已从云端下载最新进度 ☁️'); App.render(); }
         else if (res === 'up-to-date') { UI.toast('云端没有更新的进度'); }
         else { UI.toast('云端还没有数据，可先「上传进度」'); }
-        bindCloud();
       }).catch(function (e) { UI.toast('下载失败：' + e.message, 'error'); });
     },
+    'goto-admin': function () { go('admin'); },
+    'admin-fetch': function () { fetchAdminUsers(); },
     'reset-data': function () {
       UI.confirmBox('清空全部数据', '将删除所有进度、错题本和导入的词库，只保留内置词库。确定吗？', function () {
         Store.resetAll(); UI.toast('已清空'); go('dashboard');
@@ -704,6 +697,14 @@ const App = (function () {
     }
   }
 
+  function fetchAdminUsers() {
+    UI.toast('正在加载所有用户进度…');
+    CloudSync.adminList().then(function (rows) {
+      Views.setAdminUsers(rows || []);
+      App.render();
+    }).catch(function (e) { UI.toast('获取失败：' + e.message, 'error'); });
+  }
+
   function toggleTheme() {
     const set = Store.getState().settings;
     const next = set.theme === 'dark' ? 'light' : 'dark';
@@ -772,6 +773,7 @@ const App = (function () {
     go('dashboard');
     // 云同步：打开网站时自动拉取/推送
     if (window.CloudSync) {
+      CloudSync.onAuth(function () { bindCloud(); });
       setTimeout(function () { CloudSync.onLoad(); }, 600);
     }
   }

@@ -43,17 +43,11 @@ const Views = (function () {
       '<button class="card action-card" data-action="goto-import">➕ 导入单词本</button>' +
       '</div>';
 
-    // 云同步状态
-    const cloudCfg = Store.getCloud();
-    if (cloudCfg && cloudCfg.server && cloudCfg.appKey && cloudCfg.syncKey) {
-      const lastAt = (Store.getState().sync && Store.getState().sync.lastSavedAt) || 0;
-      html += '<div class="section-title"><h2>☁️ 云同步</h2></div>';
-      html += '<div class="card">';
-      html += '<div class="muted small">' + (lastAt ? '上次同步：' + fmtTime(lastAt) : '还没同步过（请到「设置 → 云同步」先上传或下载一次）') + (cloudCfg.auto ? ' · 自动同步已开启 ✓' : ' · 自动同步未开启（可在设置里打开）') + '</div>';
-      html += '<div class="btn-row"><button class="btn btn-sm btn-primary" data-action="cloud-sync-now">🔄 立即同步</button>';
-      html += '<button class="btn btn-sm" data-action="goto-settings-cloud">⚙️ 云同步设置</button></div>';
-      html += '</div>';
-    }
+    // 云同步入口（登录后多设备互通）
+    html += '<div class="section-title"><h2>☁️ 云同步</h2></div>';
+    html += '<div class="card"><p class="muted small">登录后手机和电脑进度互通；管理员可查看全部用户进度。</p><div class="btn-row">';
+    html += '<button class="btn btn-sm btn-primary" data-action="cloud-sync-now">🔄 立即同步</button>';
+    html += '<button class="btn btn-sm" data-action="goto-settings-cloud">⚙️ 云同步设置</button></div></div>';
 
     // 最近动态
     html += '<div class="section-title"><h2>最近动态</h2></div>';
@@ -249,6 +243,7 @@ const Views = (function () {
   // 会话状态
   let quiz = null;
   let cardState = { index: 0, flipped: false };
+  let adminUsers = null;
 
   function test(params) {
     params = params || {};
@@ -622,21 +617,23 @@ const Views = (function () {
     html += '<div class="section-title"><h2>外观</h2></div>';
     html += '<div class="card form-card"><div class="btn-row"><button class="btn" data-action="toggle-theme">' + (set.theme === 'dark' ? '☀️ 切换浅色' : '🌙 切换深色') + '</button></div></div>';
 
-    html += '<div class="section-title"><h2>☁️ 云同步（手机 ↔ 电脑）</h2></div>';
+    html += '<div class="section-title"><h2>☁️ 云同步（登录后手机 ↔ 电脑）</h2></div>';
     html += '<div class="card form-card">';
-    html += '<p class="muted small">用免费的 Supabase 存一份云端进度，手机和电脑都能同步。首次使用：先在一台设备「⬆️ 上传进度」，再在另一台「⬇️ 下载进度」；之后可勾选自动同步。<b>密钥请填 sb_publishable_ 开头的公钥（不要填 sb_secret_ 密钥）</b>。</p>';
-    html += '<div class="form-group"><label>项目地址（Project URL）</label><input class="input" id="clServer" placeholder="https://xxxx.supabase.co"></div>';
-    html += '<div class="form-group"><label>anon 公钥（anon public key）</label><input class="input" id="clAppKey" type="password" placeholder="sb_publishable_...（Supabase 设置→API 里复制）"></div>';
-    html += '<div class="form-group"><label>同步口令（自己起一个，比如英文名+日期，两边填一样）</label><input class="input" id="clKey" placeholder="例如 my2026"></div>';
-    html += '<div class="form-group"><label class="check"><input type="checkbox" id="clAuto"> 自动同步（打开网站时自动下载较新的，学习时自动上传）</label></div>';
+    html += '<div id="cloudLoginWrap">';
+    html += '<p class="muted small">用邮箱注册/登录后，进度只属于你自己（别人看不到你的、你也看不到别人的）。首次注册需到邮箱点一下确认链接。</p>';
+    html += '<div class="form-group"><label>邮箱</label><input class="input" id="clEmail" type="email" placeholder="you@example.com"></div>';
+    html += '<div class="form-group"><label>密码（至少 6 位）</label><input class="input" id="clPassword" type="password"></div>';
+    html += '<div class="btn-row"><button class="btn btn-primary" data-action="cloud-signup">注册</button><button class="btn" data-action="cloud-signin">登录</button></div>';
+    html += '</div>';
+    html += '<div id="cloudUserWrap" style="display:none"></div>';
+    html += '<div class="form-group"><label class="check"><input type="checkbox" id="clAuto"> 自动同步（打开时自动同步，学习时自动上传）</label></div>';
     html += '<div class="btn-row">';
-    html += '<button class="btn btn-primary" data-action="cloud-save">保存设置</button>';
-    html += '<button class="btn" data-action="cloud-test">测试连接</button>';
-    html += '<button class="btn" data-action="cloud-sync-now">🔄 立即同步</button>';
+    html += '<button class="btn btn-primary" data-action="cloud-sync-now">🔄 立即同步</button>';
     html += '<button class="btn" data-action="cloud-push">⬆️ 上传进度</button>';
     html += '<button class="btn" data-action="cloud-pull">⬇️ 下载进度</button>';
+    html += '<button class="btn" data-action="cloud-signout">退出登录</button>';
     html += '</div>';
-    html += '<p class="muted small" id="cloudStatus">未配置云同步。</p>';
+    html += '<p class="muted small" id="cloudStatus">未登录。</p>';
     html += '</div>';
 
     html += '<div class="section-title"><h2>数据</h2></div>';
@@ -710,6 +707,48 @@ const Views = (function () {
     UI.modal(html, { size: 'lg' });
   }
 
-  return { dashboard, books, study, test, errors, settings, wordModal, editWordModal, importModal, errorBookWordsModal, frequentModal, importantModal, wordContent, quizState: function(){ return quiz; }, setQuiz: function(q){ quiz = q; },
-  cardState: function(){ return cardState; }, setCardState: function(s){ cardState = Object.assign(cardState, s); } };
+  function summarizeUser(data) {
+    try {
+      const d = JSON.parse(data);
+      const total = (d.books || []).reduce(function (s, b) { return s + (b.wordIds ? b.wordIds.length : 0); }, 0);
+      const mastered = d.mastered ? Object.keys(d.mastered).length : 0;
+      const tests = (d.stats && d.stats.testsTaken) || 0;
+      const answered = (d.stats && d.stats.answered) || 0;
+      const correct = (d.stats && d.stats.correct) || 0;
+      const acc = answered ? Math.round(correct / answered * 100) : 0;
+      const err = (d.errorBooks || []).filter(function (b) { return Object.keys(b.words || {}).length; }).length;
+      const imp = d.important ? Object.keys(d.important.words || {}).length : 0;
+      const freq = d.frequent ? Object.keys(d.frequent.words || {}).length : 0;
+      return { total: total, mastered: mastered, tests: tests, answered: answered, correct: correct, acc: acc, err: err, imp: imp, freq: freq };
+    } catch (e) { return null; }
+  }
+
+  function adminTable() {
+    if (!adminUsers || !adminUsers.length) return '<div class="card"><p class="muted">还没有同步数据。</p></div>';
+    let h = '<div class="card-list">';
+    adminUsers.forEach(function (u) {
+      const s = summarizeUser(u.data);
+      const time = u.saved_at ? new Date(Number(u.saved_at)).toLocaleString() : '—';
+      h += '<div class="card"><div class="eb-head"><span class="eb-name">' + esc(u.key) + '</span><span class="muted small">最后同步：' + esc(time) + '</span></div>';
+      if (s) {
+        h += '<div class="muted small">总词 ' + s.total + ' · 已掌握 ' + s.mastered + ' · 测试 ' + s.tests + ' 次 · 正确率 ' + s.acc + '% · 错题本 ' + s.err + ' · 重要 ' + s.imp + ' · 常错 ' + s.freq + '</div>';
+      } else {
+        h += '<div class="muted small">数据无法解析（可能是旧格式）</div>';
+      }
+      h += '</div>';
+    });
+    h += '</div>';
+    return h;
+  }
+
+  function admin() {
+    let html = '<div class="page-head"><h1>🔐 开发者管理</h1><p class="muted">查看所有使用者的学习进度汇总（只有管理员能看到这个入口）。</p></div>';
+    html += '<div class="card"><div class="btn-row"><button class="btn btn-primary" data-action="admin-fetch">🔄 刷新所有用户进度</button></div></div>';
+    html += adminUsers ? adminTable() : '<div class="card"><p class="muted">点上方按钮加载所有用户进度。</p></div>';
+    return html;
+  }
+
+  return { dashboard, books, study, test, errors, settings, admin, wordModal, editWordModal, importModal, errorBookWordsModal, frequentModal, importantModal, wordContent, quizState: function(){ return quiz; }, setQuiz: function(q){ quiz = q; },
+  cardState: function(){ return cardState; }, setCardState: function(s){ cardState = Object.assign(cardState, s); },
+  adminUsers: function(){ return adminUsers; }, setAdminUsers: function(x){ adminUsers = x; } };
 })();
