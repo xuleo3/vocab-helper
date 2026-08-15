@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="词汇助手">
-<link rel="stylesheet" href="css/style.css?v=36">
+<link rel="stylesheet" href="css/style.css?v=37">
 </head>
 <body>
 <header class="topbar">
@@ -22,6 +22,7 @@
     <button class="tab" data-view="books">词库</button>
     <button class="tab" data-view="study">学习</button>
     <button class="tab" data-view="test">测试</button>
+    <button class="tab" data-view="scene">🏞️ 看图</button>
     <button class="tab" data-view="errors">错题本</button>
     <button class="tab" data-view="settings">设置</button>
   </nav>
@@ -30,15 +31,17 @@
 <main id="app" class="container"></main>
 <div id="modalRoot"></div>
 <div id="toastRoot"></div>
-<script src="js/data.js?v=36"></script>
-<script src="js/wanglu_data.js?v=36"></script>
-<script src="js/store.js?v=36"></script>
-<script src="js/cloud.js?v=36"></script>
-<script src="js/speech.js?v=36"></script>
-<script src="js/importer.js?v=36"></script>
-<script src="js/ui.js?v=36"></script>
-<script src="js/views.js?v=36"></script>
-<script src="js/app.js?v=36"></script>
+<script src="js/data.js?v=37"></script>
+<script src="js/wanglu_data.js?v=37"></script>
+<script src="js/store.js?v=37"></script>
+<script src="js/cloud.js?v=37"></script>
+<script src="js/speech.js?v=37"></script>
+<script src="js/importer.js?v=37"></script>
+<script src="js/ui.js?v=37"></script>
+<script src="js/scene_data.js?v=37"></script>
+<script src="js/scene.js?v=37"></script>
+<script src="js/views.js?v=37"></script>
+<script src="js/app.js?v=37"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {

@@ -632,6 +632,7 @@ const Views = (function () {
     html += '<div class="btn-row">';
     html += '<button class="btn btn-primary" data-action="cloud-save">保存设置</button>';
     html += '<button class="btn" data-action="cloud-test">测试连接</button>';
+    html += '<button class="btn" data-action="cloud-sync-now">🔄 立即同步</button>';
     html += '<button class="btn" data-action="cloud-push">⬆️ 上传进度</button>';
     html += '<button class="btn" data-action="cloud-pull">⬇️ 下载进度</button>';
     html += '</div>';

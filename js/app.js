@@ -21,6 +21,7 @@ const App = (function () {
       case 'test': html = Views.test(current.params); break;
       case 'errors': html = Views.errors(); break;
       case 'settings': html = Views.settings(); break;
+      case 'scene': html = (typeof SceneApp !== 'undefined') ? SceneApp.html() : '<p class="muted">生活场景加载失败</p>'; break;
       default: html = Views.dashboard();
     }
     app.innerHTML = html;
@@ -28,6 +29,7 @@ const App = (function () {
   }
 
   function afterRender() {
+    if (current.view === 'scene' && typeof SceneApp !== 'undefined' && SceneApp.afterRender) SceneApp.afterRender();
     // 高亮导航
     document.querySelectorAll('#navTabs .tab').forEach(t => {
       t.classList.toggle('active', t.dataset.view === current.view);
@@ -566,6 +568,11 @@ const App = (function () {
       }).catch(function (e) { UI.toast('上传失败：' + e.message, 'error'); });
     },
     'cloud-sync-now': function () {
+      if (document.getElementById('clServer')) {
+        const cfg = cloudCfgFromForm();
+        if (!cfg.server || !cfg.appKey || !cfg.syncKey) { UI.toast('请把项目地址、anon 密钥、同步口令都填上', 'error'); return; }
+        Store.setCloud(cfg);
+      }
       const st = Store.getState();
       if (!(st.sync && st.sync.lastSavedAt > 0)) {
         UI.toast('第一次同步请到「设置 → 云同步」选择「上传」或「下载」', 'error'); return;

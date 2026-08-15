@@ -307,3 +307,19 @@ code { background: var(--primary-soft); color: var(--primary); padding: 1px 6px;
 /* ============ 错题本分单元 ============ */
 .eb-unit-chips { margin-top: 8px; }
 .eb-unit-chips .chip { font-size: 12px; padding: 3px 10px; }
+
+
+/* ============ 生活场景 · 看图认词 ============ */
+.center { text-align: center; }
+.scene-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+.scene-card { display: flex; gap: 14px; align-items: center; }
+.scene-card-icon { font-size: 44px; line-height: 1; flex-shrink: 0; }
+.scene-card-body { flex: 1; min-width: 0; }
+.scene-word-row { align-items: center; }
+.scene-word-emoji { font-size: 30px; width: 46px; text-align: center; flex-shrink: 0; }
+.scene-flash-emoji { font-size: 110px; line-height: 1.1; }
+.scene-quiz-emoji { font-size: 110px; line-height: 1.1; text-align: center; margin: 6px 0 16px; }
+.scene-quiz-card { text-align: center; }
+.scene-quiz-card .quiz-input { text-align: center; font-size: 22px; font-weight: 700; }
+.scene-quiz-card .quiz-verdict, .scene-quiz-card .quiz-your-answer, .scene-quiz-card .sense-item { text-align: left; }
+.scene-quiz-card .btn-row { justify-content: center; }
