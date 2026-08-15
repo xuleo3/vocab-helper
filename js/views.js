@@ -3,11 +3,13 @@ const Views = (function () {
   const S = () => Store.getState();
   const esc = UI.esc;
 
+  function isAdminView() {
+    try { return (typeof CloudSync !== 'undefined') && CloudSync.isAdminCached && CloudSync.isAdminCached(); } catch (e) { return false; }
+  }
+
   function visibleBooks() {
     const all = S().books;
-    let admin = false;
-    try { admin = (typeof CloudSync !== 'undefined') && CloudSync.isAdminCached && CloudSync.isAdminCached(); } catch (e) {}
-    if (admin) return all;
+    if (isAdminView()) return all;
     const unlocked = new Set(['gaokao']);
     if ((Store.progress('gaokao') || { pct: 0 }).pct >= 80) unlocked.add('cet4');
     if ((Store.progress('cet4') || { pct: 0 }).pct >= 80) unlocked.add('cet6');
@@ -60,13 +62,15 @@ const Views = (function () {
     html += '<button class="btn btn-sm btn-primary" data-action="cloud-sync-now">🔄 立即同步</button>';
     html += '<button class="btn btn-sm" data-action="goto-settings-cloud">⚙️ 云同步设置</button></div></div>';
 
-    // 最近动态
-    html += '<div class="section-title"><h2>最近动态</h2></div>';
-    if (!s.activity.length) html += '<p class="muted">暂无动态。完成一次测试后这里会显示记录。</p>';
-    else {
-      html += '<div class="card-list">' + s.activity.slice(0, 8).map(a =>
-        '<div class="card activity-item"><span class="muted">' + fmtTime(a.time) + '</span> <span>' + esc(a.text) + '</span></div>'
-      ).join('') + '</div>';
+    // 最近动态（仅管理员可见）
+    if (isAdminView()) {
+      html += '<div class="section-title"><h2>最近动态</h2></div>';
+      if (!s.activity.length) html += '<p class="muted">暂无动态。完成一次测试后这里会显示记录。</p>';
+      else {
+        html += '<div class="card-list">' + s.activity.slice(0, 8).map(a =>
+          '<div class="card activity-item"><span class="muted">' + fmtTime(a.time) + '</span> <span>' + esc(a.text) + '</span></div>'
+        ).join('') + '</div>';
+      }
     }
     return html;
   }
