@@ -20,6 +20,7 @@ const SceneStore = (function () {
       wordStats: {},
       testSessions: {},
       stats: { testsTaken: 0, answered: 0, correct: 0 },
+      pexelsKey: '',
       sceneVersion: 0
     };
   }
@@ -47,6 +48,7 @@ const SceneStore = (function () {
     state.wordStats = state.wordStats || {};
     state.testSessions = state.testSessions || {};
     state.stats = Object.assign(d.stats, state.stats || {});
+    state.pexelsKey = state.pexelsKey || '';
     initData();
     return state;
   }
@@ -73,6 +75,8 @@ const SceneStore = (function () {
   }
 
   function getState() { return state; }
+  function getPexelsKey() { return state.pexelsKey || ''; }
+  function setPexelsKey(k) { state.pexelsKey = String(k || '').trim(); save(); }
   function getScenes() { return state.books; }
   function getScene(id) { return state.books.find(function (b) { return b.id === id; }) || null; }
   function getWord(id) { return state.words[id] || null; }
@@ -243,6 +247,7 @@ const SceneStore = (function () {
   load();
   return {
     getState, getScenes, getScene, getWord, getSceneWords, progress, overallStats,
+    getPexelsKey, setPexelsKey,
     childrenOf, getErrorBook, getErrorBookWords, ensureErrorBook, newSubErrorBook,
     recordWrongWord, markCorrectWord, bumpWordStats, finishTestStats,
     removeErrorWord, clearErrorBook,
@@ -261,6 +266,10 @@ const SceneViews = (function () {
     return '<button class="btn btn-sm star-btn' + (on ? ' on' : '') + '" data-scene-action="scene-toggle-important" data-wid="' + esc(w.id) + '">' + (on ? '★ 已在重要本' : '☆ 加入重要本') + '</button>';
   }  function scenePhoto(src, emoji, cls) {
     return '<span class="wiki-img-wrap ' + (cls || '') + '"><span class="wiki-img-fallback">' + emoji + '</span><img class="wiki-img" src="' + esc(src) + '" alt="" loading="lazy" onerror="this.style.display=\'none\'"></span>';
+  }
+
+  function wordPhoto(en, emoji) {
+    return '<div class="scene-flash-photo"><span class="scene-flash-emoji">' + emoji + '</span><img class="scene-word-photo" data-pexels="' + esc(en) + '" alt="" onerror="this.style.display=\'none\'"></div>';
   }
 
   function home() {
@@ -295,6 +304,14 @@ const SceneViews = (function () {
 
     html += '<div class="section-title"><h2>错题复习</h2></div>';
     html += '<div class="card"><div class="btn-row"><button class="btn btn-sm btn-primary" data-scene-action="scene-goto-errors">📕 生活场景错题本</button></div></div>';
+
+    const pk = SceneStore.getPexelsKey();
+    html += '<div class="section-title"><h2>⚙️ 单词真实配图（Pexels）</h2></div>';
+    html += '<div class="card form-card">';
+    html += '<p class="muted small">可选：填 Pexels API Key 后，学习卡片会显示单词的真实照片。key 只存在你本机浏览器，不会上传到网站。免费申请地址 pexels.com/api。</p>';
+    html += '<div class="form-group"><label>Pexels API Key</label><input class="input" id="scenePexelsKey" value="' + esc(pk) + '" placeholder="粘贴你的 key"></div>';
+    html += '<div class="btn-row"><button class="btn btn-primary" data-scene-action="scene-save-pexels">保存</button></div>';
+    html += '</div>';
     return html;
   }
 
@@ -350,7 +367,7 @@ const SceneViews = (function () {
     html += '<div class="study-progress muted small">' + sc.icon + ' ' + esc(sc.name) + ' · ' + (cs.index + 1) + ' / ' + words.length + '</div>';
     html += '<div class="flashcard' + (cs.flipped ? ' flipped' : '') + '" id="sceneFlashcard">';
     html += '<div class="flash-inner">';
-    html += '<div class="flash-front"><div class="scene-flash-emoji">' + w.emoji + '</div><div class="muted small">看图片，想英文</div></div>';
+    html += '<div class="flash-front">' + wordPhoto(w.en, w.emoji) + '<div class="muted small">看图片，想英文</div></div>';
     html += '<div class="flash-back">';
     html += '<div class="flash-word">' + esc(w.en) + '</div>' + UI.posBadge(w.pos);
     html += '<div class="word-mean">' + esc(w.zh) + '</div>';
@@ -543,8 +560,32 @@ const SceneViews = (function () {
 
 
 
+  function loadWordPhotos() {
+    if (typeof fetch !== 'function') return;
+    const key = SceneStore.getPexelsKey();
+    if (!key) return;
+    let cache = {};
+    try { cache = JSON.parse(localStorage.getItem('scene_pexels_cache') || '{}'); } catch (e) {}
+    document.querySelectorAll('img.scene-word-photo[data-pexels]').forEach(function (img) {
+      const q = img.getAttribute('data-pexels');
+      if (!q) return;
+      if (cache[q]) { img.onload = function () { img.style.display = ''; }; img.src = cache[q]; return; }
+      const url = 'https://api.pexels.com/v1/search?query=' + encodeURIComponent(q) + '&per_page=1&orientation=square';
+      fetch(url, { headers: { 'Authorization': key } }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+        if (j && j.photos && j.photos[0] && j.photos[0].src && j.photos[0].src.medium) {
+          const src = j.photos[0].src.medium;
+          cache[q] = src;
+          try { localStorage.setItem('scene_pexels_cache', JSON.stringify(cache)); } catch (e) {}
+          img.onload = function () { img.style.display = ''; };
+          img.src = src;
+        }
+      }).catch(function () {});
+    });
+  }
+
   function afterRender() {
     updateTestMode();
+    loadWordPhotos();
     const input = document.getElementById('sceneQuizInput');
     if (input && current.view === 'quiz' && quiz && !quiz.revealed) input.focus();
   }
@@ -747,6 +788,14 @@ const SceneViews = (function () {
       case 'scene-mode': cardReset(); go('learn', { scene: el.dataset.scene, mode: el.dataset.mode }); break;
       case 'scene-test': go('test', { scene: el.dataset.scene }); break;
       case 'scene-goto-errors': go('errors'); break;
+      case 'scene-save-pexels':
+        (function () {
+          const input = document.getElementById('scenePexelsKey');
+          SceneStore.setPexelsKey(input ? input.value : '');
+          UI.toast('已保存 Pexels Key ✓');
+          App.render();
+        })();
+        break;
       case 'scene-start-test': startTest(); break;
       case 'scene-submit': submit(); break;
       case 'scene-next': next(); break;

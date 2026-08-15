@@ -335,3 +335,9 @@ code { background: var(--primary-soft); color: var(--primary); padding: 1px 6px;
 .wiki-img-wrap { position: relative; display: block; width: 100%; height: 100%; }
 .wiki-img-fallback { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 52px; }
 .wiki-img { display: block; width: 100%; height: 100%; object-fit: cover; position: relative; }
+
+
+/* ============ 单词真实配图（Pexels） ============ */
+.scene-flash-photo { position: relative; width: 100%; height: 230px; overflow: hidden; border-radius: 12px; }
+.scene-flash-photo .scene-flash-emoji { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 110px; }
+.scene-word-photo { position: relative; width: 100%; height: 100%; object-fit: cover; display: block; }
