@@ -773,7 +773,7 @@ const App = (function () {
     go('dashboard');
     // 云同步：打开网站时自动拉取/推送
     if (window.CloudSync) {
-      CloudSync.onAuth(function () { bindCloud(); });
+      CloudSync.onAuth(function () { bindCloud(); App.render(); });
       setTimeout(function () { CloudSync.onLoad(); }, 600);
     }
   }

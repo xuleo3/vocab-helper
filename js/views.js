@@ -3,6 +3,17 @@ const Views = (function () {
   const S = () => Store.getState();
   const esc = UI.esc;
 
+  function visibleBooks() {
+    const all = S().books;
+    let admin = false;
+    try { admin = (typeof CloudSync !== 'undefined') && CloudSync.isAdminCached && CloudSync.isAdminCached(); } catch (e) {}
+    if (admin) return all;
+    const unlocked = new Set(['gaokao']);
+    if ((Store.progress('gaokao') || { pct: 0 }).pct >= 80) unlocked.add('cet4');
+    if ((Store.progress('cet4') || { pct: 0 }).pct >= 80) unlocked.add('cet6');
+    return all.filter(function (b) { return unlocked.has(b.id); });
+  }
+
   // ---------- 首页 ----------
   function dashboard() {
     const st = Store.overallStats();
@@ -22,7 +33,7 @@ const Views = (function () {
 
     // 学习进度
     html += '<div class="section-title"><h2>词库进度</h2></div>';
-    const books = s.books;
+    const books = visibleBooks();
     if (!books.length) html += '<p class="muted">还没有词库，去「词库」页导入或使用内置词库。</p>';
     else {
       html += '<div class="card-list">' + books.map(b => {
@@ -72,8 +83,8 @@ const Views = (function () {
     let html = '<div class="page-head"><h1>词库</h1><p class="muted">内置《六级词汇闪过》《雅思词汇真经》，也可以导入自己的单词本。</p></div>';
     html += '<div class="toolbar"><button class="btn btn-primary" data-action="open-import">➕ 导入单词本</button></div>';
 
-    if (!s.books.length) html += '<p class="muted">还没有词库。</p>';
-    html += '<div class="book-grid">' + s.books.map(b => {
+    if (!visibleBooks().length) html += '<p class="muted">还没有词库。</p>';
+    html += '<div class="book-grid">' + visibleBooks().map(b => {
       const p = Store.progress(b.id);
       const errCount = s.errorBooks.filter(e => e.bookId === b.id).reduce((sum, e) => sum + Object.keys(e.words).length, 0);
       return '<div class="card book-card">' +
@@ -111,7 +122,7 @@ const Views = (function () {
     if (!bookId) {
       const s = S();
       let html = '<div class="page-head"><h1>学习</h1><p class="muted">选择一本词库开始背。</p></div>';
-      html += '<div class="book-grid">' + s.books.map(b =>
+      html += '<div class="book-grid">' + visibleBooks().map(b =>
         '<button class="card book-card" data-action="study-book" data-book="' + esc(b.id) + '">' +
         '<div class="book-title">' + esc(b.name) + '</div>' +
         '<div class="muted small">' + b.wordIds.length + ' 词 · ' + b.units.length + ' 单元</div>' +
@@ -269,7 +280,7 @@ const Views = (function () {
 
     if (preset === 'book') {
       html += '<div class="form-group"><label>词库</label><select class="input" id="testBook">';
-      s.books.forEach(b => { html += '<option value="' + esc(b.id) + '"' + (b.id === presetBook ? ' selected' : '') + '>' + esc(b.name) + '</option>'; });
+      visibleBooks().forEach(b => { html += '<option value="' + esc(b.id) + '"' + (b.id === presetBook ? ' selected' : '') + '>' + esc(b.name) + '</option>'; });
       html += '</select></div>';
       html += '<div class="form-group"><label>单元 / 章节（选一个就只测这一章）</label><select class="input" id="testUnit"><option value="">全部单元</option></select></div>';
       html += '<div class="form-group"><label>错题去向</label>';
@@ -442,7 +453,7 @@ const Views = (function () {
     }
 
     // 各词库错题本树
-    s.books.forEach(book => {
+    visibleBooks().forEach(book => {
       const roots = s.errorBooks.filter(e => e.bookId === book.id && !e.parentId);
       const hasAny = s.errorBooks.some(e => e.bookId === book.id && Object.keys(e.words).length);
       html += '<div class="section-title"><h2>' + esc(book.name) + ' 的错题本</h2></div>';

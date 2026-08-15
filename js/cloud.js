@@ -8,6 +8,7 @@ const CloudSync = (function () {
   let sb = null;
   let lastPushAt = 0;
   let busy = false;
+  let cachedAdmin = false;
 
   function client() {
     if (!sb && window.supabase && window.supabase.createClient) {
@@ -37,11 +38,13 @@ const CloudSync = (function () {
   async function getSession() {
     const c = client(); if (!c) return null;
     const { data } = await c.auth.getSession();
-    return data.session || null;
+    const session = data.session || null;
+    cachedAdmin = isAdmin(session);
+    return session;
   }
   function onAuth(cb) {
     const c = client(); if (!c) return;
-    c.auth.onAuthStateChange(function (ev, session) { cb(ev, session); });
+    c.auth.onAuthStateChange(function (ev, session) { cachedAdmin = isAdmin(session); cb(ev, session); });
   }
   function isAdmin(session) {
     return !!(session && session.user && session.user.app_metadata && session.user.app_metadata.is_admin);
@@ -161,7 +164,7 @@ const CloudSync = (function () {
     } finally { busy = false; }
   }
 
-  return { signUp, signIn, signOut, getSession, onAuth, isAdmin, push, pull, sync, adminList, onLocalSave, onLoad, autoGet, autoSet };
+  return { signUp, signIn, signOut, getSession, onAuth, isAdmin, isAdminCached: function(){ return cachedAdmin; }, push, pull, sync, adminList, onLocalSave, onLoad, autoGet, autoSet };
 })();
 
 window.CloudSync = CloudSync;
