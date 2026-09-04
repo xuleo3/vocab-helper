@@ -1,142 +1,97 @@
 // ============================================================
-// CloudSync：基于 Supabase 登录 + 行级安全(RLS) 的云同步
-// 每人注册/登录后只能读写自己的进度；管理员(is_admin)可看全部
+// CloudSync：单用户 + Vercel Blob 云同步
+// 手机/电脑填同一个“同步口令”即可互通（口令只保存在本机浏览器里）。
+// 后端接口：/api/sync（Vercel Serverless Function，数据存 Vercel Blob）
 // ============================================================
 const CloudSync = (function () {
-  const URL = 'https://ftaalioocdwcqbqwadyl.supabase.co';
-  const ANON = 'sb_publishable_p_9ctWLRZ-_xSrZP8Yb2Qw_Mnq70LW2';
-  let sb = null;
+  // 电脑(github.io/本地)、手机、Vercel 域名都调用这个绝对地址
+  const API = 'https://vocab-helper-blond.vercel.app/api/sync';
+  const LS_PASS = 'vocab_sync_pass';
+  const LS_AUTO = 'vocab_cloud_auto';
   let lastPushAt = 0;
   let busy = false;
-  let cachedAdmin = false;
 
-  function client() {
-    if (!sb && window.supabase && window.supabase.createClient) {
-      sb = window.supabase.createClient(URL, ANON, { persistSession: true });
-    }
-    return sb;
-  }
-  function autoGet() { return localStorage.getItem('vocab_cloud_auto') === '1'; }
-  function autoSet(v) { localStorage.setItem('vocab_cloud_auto', v ? '1' : '0'); }
+  function passGet() { try { return localStorage.getItem(LS_PASS) || ''; } catch (e) { return ''; } }
+  function passSet(v) { try { localStorage.setItem(LS_PASS, String(v || '').trim()); } catch (e) {} }
+  function autoGet() { return localStorage.getItem(LS_AUTO) === '1'; }
+  function autoSet(v) { localStorage.setItem(LS_AUTO, v ? '1' : '0'); }
 
-  async function signUp(email, pw) {
-    const c = client(); if (!c) throw new Error('云同步组件未加载');
-    const { data, error } = await c.auth.signUp({ email: email, password: pw });
-    if (error) throw new Error(translateAuth(error));
-    return data;
+  async function apiGet(pass) {
+    const res = await fetch(API + '?pass=' + encodeURIComponent(pass), { method: 'GET' });
+    return parseRes(res);
   }
-  async function signIn(email, pw) {
-    const c = client(); if (!c) throw new Error('云同步组件未加载');
-    const { data, error } = await c.auth.signInWithPassword({ email: email, password: pw });
-    if (error) throw new Error(translateAuth(error));
-    return data;
+  async function apiPost(pass, data, savedAt) {
+    const res = await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pass, data: data, savedAt: savedAt })
+    });
+    return parseRes(res);
   }
-  async function signOut() {
-    const c = client(); if (!c) return;
-    await c.auth.signOut();
-  }
-  async function getSession() {
-    const c = client(); if (!c) return null;
-    const { data } = await c.auth.getSession();
-    const session = data.session || null;
-    cachedAdmin = isAdmin(session);
-    return session;
-  }
-  function onAuth(cb) {
-    const c = client(); if (!c) return;
-    c.auth.onAuthStateChange(function (ev, session) { cachedAdmin = isAdmin(session); cb(ev, session); });
-  }
-  function isAdmin(session) {
-    return !!(session && session.user && session.user.app_metadata && session.user.app_metadata.is_admin);
-  }
-  async function currentUid() {
-    const s = await getSession();
-    return (s && s.user) ? s.user.id : null;
+  async function parseRes(res) {
+    let j = null;
+    try { j = await res.json(); } catch (e) { j = null; }
+    if (!res.ok) throw new Error((j && j.error) || ('云同步服务出错(' + res.status + ')'));
+    return j || {};
   }
 
-  function translateAuth(e) {
-    const m = (e && e.message) || '登录失败';
-    if (/Invalid login credentials/i.test(m)) return '邮箱或密码不对';
-    if (/already registered/i.test(m)) return '这个邮箱已注册，请直接登录';
-    if (/password should be at least/i.test(m)) return '密码至少 6 位';
-    if (/email_address_invalid|Unable to validate email/i.test(m)) return '邮箱格式不对';
-    if (/rate limit|rate_limit/i.test(m)) return '操作太频繁，请稍后再试';
-    if (/Email not confirmed/i.test(m)) return '邮箱还没确认，请先去邮箱点确认链接';
-    return m;
+  function localSavedAt() {
+    const st = Store.getState();
+    return (st.sync && st.sync.lastSavedAt) || 0;
   }
-
-  // 上传本地进度到云端（按登录用户 uid 存一行）
-  async function push() {
-    const uid = await currentUid();
-    if (!uid) throw new Error('请先登录');
-    const savedAt = Date.now();
-    const { error } = await client().from('sync_data').upsert(
-      { key: uid, user_id: uid, data: Store.exportData(), saved_at: savedAt },
-      { onConflict: 'key' }
-    );
-    if (error) throw new Error(error.message);
+  function setLocalSavedAt(t) {
     const st = Store.getState();
     st.sync = st.sync || { cloud: null, lastSavedAt: 0 };
-    st.sync.lastSavedAt = savedAt;
+    st.sync.lastSavedAt = t;
     Store.saveQuiet();
+  }
+
+  // 上传本地进度到云端（只传学习进度，不传词库，体积小）
+  async function push() {
+    const pass = passGet();
+    if (!pass) throw new Error('请先在「设置」里填写同步口令');
+    const savedAt = Date.now();
+    await apiPost(pass, Store.exportSyncData(), savedAt);
+    setLocalSavedAt(savedAt);
     return savedAt;
   }
 
-  // 从云端下载自己的进度
+  // 从云端下载进度到本机
   async function pull() {
-    const uid = await currentUid();
-    if (!uid) throw new Error('请先登录');
-    const { data, error } = await client().from('sync_data').select('data,saved_at').eq('key', uid).maybeSingle();
-    if (error) throw new Error(error.message);
-    if (!data || !data.data) return 'empty';
-    const cloudAt = Number(data.saved_at) || 0;
-    const st = Store.getState();
-    const localAt = (st.sync && st.sync.lastSavedAt) || 0;
+    const pass = passGet();
+    if (!pass) throw new Error('请先在「设置」里填写同步口令');
+    const j = await apiGet(pass);
+    if (!j || j.empty || !j.data) return 'empty';
+    const cloudAt = Number(j.savedAt) || 0;
+    const localAt = localSavedAt();
     if (localAt > 0 && cloudAt <= localAt) return 'up-to-date';
-    Store.importData(data.data);
-    const s2 = Store.getState();
-    s2.sync = s2.sync || { cloud: null, lastSavedAt: 0 };
-    s2.sync.lastSavedAt = cloudAt;
-    Store.saveQuiet();
+    Store.importSyncData(j.data);
+    setLocalSavedAt(cloudAt);
     return 'applied';
   }
 
-  // 统一同步：按时间新旧决定上传/下载
+  // 统一同步：比较云端与本机的新旧，谁新用谁
   async function sync() {
-    const uid = await currentUid();
-    if (!uid) throw new Error('请先登录');
-    const { data, error } = await client().from('sync_data').select('data,saved_at').eq('key', uid).maybeSingle();
-    if (error) throw new Error(error.message);
-    const st = Store.getState();
-    const localAt = (st.sync && st.sync.lastSavedAt) || 0;
-    if (!data || !data.data) { await push(); return 'pushed'; }
-    const cloudAt = Number(data.saved_at) || 0;
+    const pass = passGet();
+    if (!pass) throw new Error('请先在「设置」里填写同步口令');
+    const j = await apiGet(pass);
+    const localAt = localSavedAt();
+    if (!j || j.empty || !j.data) { await push(); return 'pushed'; }
+    const cloudAt = Number(j.savedAt) || 0;
     if (cloudAt > localAt) {
-      Store.importData(data.data);
-      const s2 = Store.getState();
-      s2.sync = s2.sync || { cloud: null, lastSavedAt: 0 };
-      s2.sync.lastSavedAt = cloudAt;
-      Store.saveQuiet();
+      Store.importSyncData(j.data);
+      setLocalSavedAt(cloudAt);
       return 'pulled';
     }
     if (cloudAt < localAt) { await push(); return 'pushed'; }
     return 'same';
   }
 
-  // 管理员：查看所有用户的进度
-  async function adminList() {
-    const s = await getSession();
-    if (!isAdmin(s)) throw new Error('你不是管理员');
-    const { data, error } = await client().from('sync_data').select('key,data,saved_at').order('saved_at', { ascending: false }).limit(200);
-    if (error) throw new Error(error.message);
-    return data || [];
-  }
-
-  // 本地保存后自动上传（节流 30 秒）
+  // 本地保存后自动上传（节流 30 秒）；只有“同步过”才自动上传，避免误覆盖云端
   function onLocalSave() {
     if (!autoGet()) return;
-    const st = Store.getState();
-    if (!(st.sync && st.sync.lastSavedAt > 0)) return;
+    if (!passGet()) return;
+    if (!(localSavedAt() > 0)) return;
     const now = Date.now();
     if (now - lastPushAt < 30000) return;
     lastPushAt = now;
@@ -145,11 +100,10 @@ const CloudSync = (function () {
     sync().catch(function () {}).then(function () { busy = false; });
   }
 
-  // 打开网站时自动同步
+  // 打开网站时自动同步（首次请先手动「下载进度」一次）
   async function onLoad() {
     if (!autoGet()) return;
-    const s = await getSession();
-    if (!s) return;
+    if (!passGet()) return;
     const st = Store.getState();
     if (!(st.sync && st.sync.lastSavedAt > 0)) return;
     busy = true;
@@ -164,7 +118,7 @@ const CloudSync = (function () {
     } finally { busy = false; }
   }
 
-  return { signUp, signIn, signOut, getSession, onAuth, isAdmin, isAdminCached: function(){ return cachedAdmin; }, push, pull, sync, adminList, onLocalSave, onLoad, autoGet, autoSet };
+  return { push, pull, sync, onLocalSave, onLoad, autoGet, autoSet, passGet, passSet };
 })();
 
 window.CloudSync = CloudSync;

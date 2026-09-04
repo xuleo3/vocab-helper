@@ -480,6 +480,31 @@ const Store = (function () {
 
   function getState() { return state; }
 
+  // 云同步专用：只导出"学习进度"（不含固定的词库/单词表，体积小很多）
+  function exportSyncData() {
+    return JSON.stringify({
+      syncVersion: 2,
+      mastered: state.mastered,
+      errorBooks: state.errorBooks,
+      important: state.important,
+      frequent: state.frequent,
+      wordStats: state.wordStats,
+      testSessions: state.testSessions,
+      stats: state.stats,
+      settings: state.settings,
+      activity: state.activity
+    });
+  }
+  // 云同步专用：把云端进度合并进来（保留本机词库/单词/云设置）
+  function importSyncData(json) {
+    const parsed = JSON.parse(json);
+    if (!parsed || parsed.syncVersion !== 2) throw new Error('不是有效的云同步数据');
+    ['mastered', 'errorBooks', 'important', 'frequent', 'wordStats', 'testSessions', 'stats', 'settings', 'activity'].forEach(function (k) {
+      if (parsed[k] !== undefined) state[k] = parsed[k];
+    });
+    saveQuiet();
+  }
+
   function getCloud() { return (state.sync && state.sync.cloud) || null; }
   function setCloud(cfg) {
     state.sync = state.sync || { cloud: null, lastSavedAt: 0 };
@@ -503,6 +528,7 @@ const Store = (function () {
     evaluateAnswer, isCorrect, normalize,
     addImportedBook, deleteBook, updateWord, setSettings, setTheme,
     exportData, importData, resetAll, progress, overallStats,
-    saveQuiet, getCloud, setCloud
+    saveQuiet, getCloud, setCloud,
+    exportSyncData, importSyncData
   };
 })();

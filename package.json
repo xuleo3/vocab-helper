@@ -1,0 +1,11 @@
+{
+  "name": "vocab-helper",
+  "version": "2.3.0",
+  "private": true,
+  "description": "词汇助手：六级/雅思/高考/四级/王陆听力/生活场景 背单词网站（纯静态 + Vercel Blob 云同步）",
+  "type": "module",
+  "scripts": {},
+  "dependencies": {
+    "@vercel/blob": "^2.2.0"
+  }
+}

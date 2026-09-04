@@ -4,7 +4,9 @@ const Views = (function () {
   const esc = UI.esc;
 
   function isAdminView() {
-    try { return (typeof CloudSync !== 'undefined') && CloudSync.isAdminCached && CloudSync.isAdminCached(); } catch (e) { return false; }
+    // 单用户模式：默认就是“所有者”，显示全部词库与最近动态。
+    // 以后要分享给朋友时，可在此按设备做开关（visibleBooks 里保留了朋友逐步解锁逻辑）。
+    try { return localStorage.getItem('vocab_owner_mode') !== '0'; } catch (e) { return true; }
   }
 
   function visibleBooks() {
@@ -56,13 +58,13 @@ const Views = (function () {
       '<button class="card action-card" data-action="goto-import">➕ 导入单词本</button>' +
       '</div>';
 
-    // 云同步入口（登录后多设备互通）
+    // 云同步入口（填同一个口令后多设备互通）
     html += '<div class="section-title"><h2>☁️ 云同步</h2></div>';
-    html += '<div class="card"><p class="muted small">登录后手机和电脑进度互通；管理员可查看全部用户进度。</p><div class="btn-row">';
+    html += '<div class="card"><p class="muted small">在「设置」里填一个同步口令，手机和电脑填同一个即可互通学习进度。</p><div class="btn-row">';
     html += '<button class="btn btn-sm btn-primary" data-action="cloud-sync-now">🔄 立即同步</button>';
     html += '<button class="btn btn-sm" data-action="goto-settings-cloud">⚙️ 云同步设置</button></div></div>';
 
-    // 最近动态（仅管理员可见）
+    // 最近动态
     if (isAdminView()) {
       html += '<div class="section-title"><h2>最近动态</h2></div>';
       if (!s.activity.length) html += '<p class="muted">暂无动态。完成一次测试后这里会显示记录。</p>';
@@ -258,7 +260,6 @@ const Views = (function () {
   // 会话状态
   let quiz = null;
   let cardState = { index: 0, flipped: false };
-  let adminUsers = null;
 
   function test(params) {
     params = params || {};
@@ -632,23 +633,20 @@ const Views = (function () {
     html += '<div class="section-title"><h2>外观</h2></div>';
     html += '<div class="card form-card"><div class="btn-row"><button class="btn" data-action="toggle-theme">' + (set.theme === 'dark' ? '☀️ 切换浅色' : '🌙 切换深色') + '</button></div></div>';
 
-    html += '<div class="section-title"><h2>☁️ 云同步（登录后手机 ↔ 电脑）</h2></div>';
+    html += '<div class="section-title"><h2>☁️ 云同步（手机 ↔ 电脑）</h2></div>';
     html += '<div class="card form-card">';
-    html += '<div id="cloudLoginWrap">';
-    html += '<p class="muted small">用邮箱注册/登录后，进度只属于你自己（别人看不到你的、你也看不到别人的）。首次注册需到邮箱点一下确认链接。</p>';
-    html += '<div class="form-group"><label>邮箱</label><input class="input" id="clEmail" type="email" placeholder="you@example.com"></div>';
-    html += '<div class="form-group"><label>密码（至少 6 位）</label><input class="input" id="clPassword" type="password"></div>';
-    html += '<div class="btn-row"><button class="btn btn-primary" data-action="cloud-signup">注册</button><button class="btn" data-action="cloud-signin">登录</button></div>';
-    html += '</div>';
-    html += '<div id="cloudUserWrap" style="display:none"></div>';
-    html += '<div class="form-group"><label class="check"><input type="checkbox" id="clAuto"> 自动同步（打开时自动同步，学习时自动上传）</label></div>';
+    html += '<p class="muted small">设置一个「同步口令」（自己记得住的一串字母/数字），手机和电脑填<b>同一个口令</b>就能互相同步学习进度。口令只存在本机浏览器里，不会上传。</p>';
+    html += '<div class="form-group"><label>同步口令</label><div class="btn-row" style="align-items:center">';
+    html += '<input class="input" id="clPass" type="password" placeholder="输入同步口令（至少 4 位）" style="flex:1;min-width:160px">';
+    html += '<button class="btn btn-primary" data-action="cloud-save-pass">保存口令</button></div></div>';
+    html += '<div class="form-group"><label class="check"><input type="checkbox" id="clAuto"> 自动同步（学习时自动上传；打开网站时自动同步）</label></div>';
     html += '<div class="btn-row">';
     html += '<button class="btn btn-primary" data-action="cloud-sync-now">🔄 立即同步</button>';
     html += '<button class="btn" data-action="cloud-push">⬆️ 上传进度</button>';
     html += '<button class="btn" data-action="cloud-pull">⬇️ 下载进度</button>';
-    html += '<button class="btn" data-action="cloud-signout">退出登录</button>';
     html += '</div>';
-    html += '<p class="muted small" id="cloudStatus">未登录。</p>';
+    html += '<p class="muted small" id="cloudStatus">未设置口令。</p>';
+    html += '<p class="muted small">换新设备：先在旧设备点「⬆️ 上传进度」，再在新设备填口令后点「⬇️ 下载进度」；之后可打开自动同步。</p>';
     html += '</div>';
 
     html += '<div class="section-title"><h2>数据</h2></div>';
@@ -722,48 +720,6 @@ const Views = (function () {
     UI.modal(html, { size: 'lg' });
   }
 
-  function summarizeUser(data) {
-    try {
-      const d = JSON.parse(data);
-      const total = (d.books || []).reduce(function (s, b) { return s + (b.wordIds ? b.wordIds.length : 0); }, 0);
-      const mastered = d.mastered ? Object.keys(d.mastered).length : 0;
-      const tests = (d.stats && d.stats.testsTaken) || 0;
-      const answered = (d.stats && d.stats.answered) || 0;
-      const correct = (d.stats && d.stats.correct) || 0;
-      const acc = answered ? Math.round(correct / answered * 100) : 0;
-      const err = (d.errorBooks || []).filter(function (b) { return Object.keys(b.words || {}).length; }).length;
-      const imp = d.important ? Object.keys(d.important.words || {}).length : 0;
-      const freq = d.frequent ? Object.keys(d.frequent.words || {}).length : 0;
-      return { total: total, mastered: mastered, tests: tests, answered: answered, correct: correct, acc: acc, err: err, imp: imp, freq: freq };
-    } catch (e) { return null; }
-  }
-
-  function adminTable() {
-    if (!adminUsers || !adminUsers.length) return '<div class="card"><p class="muted">还没有同步数据。</p></div>';
-    let h = '<div class="card-list">';
-    adminUsers.forEach(function (u) {
-      const s = summarizeUser(u.data);
-      const time = u.saved_at ? new Date(Number(u.saved_at)).toLocaleString() : '—';
-      h += '<div class="card"><div class="eb-head"><span class="eb-name">' + esc(u.key) + '</span><span class="muted small">最后同步：' + esc(time) + '</span></div>';
-      if (s) {
-        h += '<div class="muted small">总词 ' + s.total + ' · 已掌握 ' + s.mastered + ' · 测试 ' + s.tests + ' 次 · 正确率 ' + s.acc + '% · 错题本 ' + s.err + ' · 重要 ' + s.imp + ' · 常错 ' + s.freq + '</div>';
-      } else {
-        h += '<div class="muted small">数据无法解析（可能是旧格式）</div>';
-      }
-      h += '</div>';
-    });
-    h += '</div>';
-    return h;
-  }
-
-  function admin() {
-    let html = '<div class="page-head"><h1>🔐 开发者管理</h1><p class="muted">查看所有使用者的学习进度汇总（只有管理员能看到这个入口）。</p></div>';
-    html += '<div class="card"><div class="btn-row"><button class="btn btn-primary" data-action="admin-fetch">🔄 刷新所有用户进度</button></div></div>';
-    html += adminUsers ? adminTable() : '<div class="card"><p class="muted">点上方按钮加载所有用户进度。</p></div>';
-    return html;
-  }
-
-  return { dashboard, books, study, test, errors, settings, admin, wordModal, editWordModal, importModal, errorBookWordsModal, frequentModal, importantModal, wordContent, quizState: function(){ return quiz; }, setQuiz: function(q){ quiz = q; },
-  cardState: function(){ return cardState; }, setCardState: function(s){ cardState = Object.assign(cardState, s); },
-  adminUsers: function(){ return adminUsers; }, setAdminUsers: function(x){ adminUsers = x; } };
+  return { dashboard, books, study, test, errors, settings, wordModal, editWordModal, importModal, errorBookWordsModal, frequentModal, importantModal, wordContent, quizState: function(){ return quiz; }, setQuiz: function(q){ quiz = q; },
+  cardState: function(){ return cardState; }, setCardState: function(s){ cardState = Object.assign(cardState, s); } };
 })();

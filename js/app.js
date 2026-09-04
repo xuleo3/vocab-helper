@@ -21,7 +21,6 @@ const App = (function () {
       case 'test': html = Views.test(current.params); break;
       case 'errors': html = Views.errors(); break;
       case 'settings': html = Views.settings(); break;
-      case 'admin': html = Views.admin(); break;
       case 'scene': html = (typeof SceneApp !== 'undefined') ? SceneApp.html() : '<p class="muted">生活场景加载失败</p>'; break;
       default: html = Views.dashboard();
     }
@@ -158,28 +157,10 @@ const App = (function () {
       au.checked = CloudSync.autoGet();
       if (!au.dataset.bound) { au.dataset.bound = '1'; au.addEventListener('change', function () { CloudSync.autoSet(au.checked); UI.toast('已保存'); }); }
     }
+    const passInput = document.getElementById('clPass');
+    if (passInput) passInput.value = CloudSync.passGet();
     const st = document.getElementById('cloudStatus');
-    const loginWrap = document.getElementById('cloudLoginWrap');
-    const userWrap = document.getElementById('cloudUserWrap');
-    try {
-      const session = await CloudSync.getSession();
-      const email = (session && session.user) ? session.user.email : '';
-      const admin = CloudSync.isAdmin(session);
-      if (email) {
-        if (loginWrap) loginWrap.style.display = 'none';
-        if (userWrap) {
-          userWrap.style.display = '';
-          userWrap.innerHTML = '<p class="muted small">已登录：' + UI.esc(email) + (admin ? ' <span class="badge badge-other">管理员</span>' : '') + '</p>' + (admin ? '<div class="btn-row"><button class="btn btn-sm btn-primary" data-action="goto-admin">🔐 开发者管理（看全部进度）</button></div>' : '');
-        }
-        if (st) st.textContent = '已登录：' + email + (admin ? '（管理员）' : '');
-      } else {
-        if (loginWrap) loginWrap.style.display = '';
-        if (userWrap) { userWrap.style.display = 'none'; userWrap.innerHTML = ''; }
-        if (st) st.textContent = '未登录，注册或登录后即可云同步。';
-      }
-    } catch (e) {
-      if (st) st.textContent = '登录状态读取失败：' + e.message;
-    }
+    if (st) st.textContent = CloudSync.passGet() ? '已设置同步口令 ✓（手机/电脑填同一个口令即可互通）' : '未设置同步口令。';
   }
 
   function fillUnitSelect(bookId) {
@@ -541,28 +522,13 @@ const App = (function () {
     'toggle-theme': function () { toggleTheme(); },
     'export-data': function () { exportData(); },
     'import-data': function () { importData(); },
-    'cloud-signup': function () {
-      const email = (document.getElementById('clEmail') || {}).value.trim();
-      const pw = (document.getElementById('clPassword') || {}).value;
-      if (!email || !pw) { UI.toast('请填写邮箱和密码', 'error'); return; }
-      UI.toast('正在注册…');
-      CloudSync.signUp(email, pw).then(function () {
-        UI.toast('注册成功！请到邮箱点一下确认链接后再登录');
-        bindCloud();
-      }).catch(function (e) { UI.toast(e.message, 'error'); });
-    },
-    'cloud-signin': function () {
-      const email = (document.getElementById('clEmail') || {}).value.trim();
-      const pw = (document.getElementById('clPassword') || {}).value;
-      if (!email || !pw) { UI.toast('请填写邮箱和密码', 'error'); return; }
-      UI.toast('正在登录…');
-      CloudSync.signIn(email, pw).then(function () {
-        UI.toast('登录成功 ✓');
-        bindCloud();
-      }).catch(function (e) { UI.toast(e.message, 'error'); });
-    },
-    'cloud-signout': function () {
-      CloudSync.signOut().then(function () { UI.toast('已退出登录'); bindCloud(); }).catch(function (e) { UI.toast('退出失败：' + e.message, 'error'); });
+    'cloud-save-pass': function () {
+      const v = ((document.getElementById('clPass') || {}).value || '').trim();
+      if (!v) { UI.toast('请输入同步口令', 'error'); return; }
+      if (v.length < 4) { UI.toast('口令至少 4 位', 'error'); return; }
+      CloudSync.passSet(v);
+      UI.toast('同步口令已保存 ✓');
+      bindCloud();
     },
     'cloud-push': function () {
       UI.toast('正在上传…');
@@ -587,8 +553,6 @@ const App = (function () {
         else { UI.toast('云端还没有数据，可先「上传进度」'); }
       }).catch(function (e) { UI.toast('下载失败：' + e.message, 'error'); });
     },
-    'goto-admin': function () { go('admin'); },
-    'admin-fetch': function () { fetchAdminUsers(); },
     'reset-data': function () {
       UI.confirmBox('清空全部数据', '将删除所有进度、错题本和导入的词库，只保留内置词库。确定吗？', function () {
         Store.resetAll(); UI.toast('已清空'); go('dashboard');
@@ -697,14 +661,6 @@ const App = (function () {
     }
   }
 
-  function fetchAdminUsers() {
-    UI.toast('正在加载所有用户进度…');
-    CloudSync.adminList().then(function (rows) {
-      Views.setAdminUsers(rows || []);
-      App.render();
-    }).catch(function (e) { UI.toast('获取失败：' + e.message, 'error'); });
-  }
-
   function toggleTheme() {
     const set = Store.getState().settings;
     const next = set.theme === 'dark' ? 'light' : 'dark';
@@ -771,11 +727,8 @@ const App = (function () {
     document.documentElement.setAttribute('data-theme', theme);
     bind();
     go('dashboard');
-    // 云同步：打开网站时自动拉取/推送
-    if (window.CloudSync) {
-      CloudSync.onAuth(function () { bindCloud(); App.render(); });
-      setTimeout(function () { CloudSync.onLoad(); }, 600);
-    }
+    // 云同步：打开网站时自动拉取/推送（口令已设置且曾同步过才会执行）
+    if (window.CloudSync) setTimeout(function () { CloudSync.onLoad(); }, 600);
   }
 
   return { go, render, init };
