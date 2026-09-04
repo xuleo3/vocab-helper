@@ -2,6 +2,8 @@
 const Views = (function () {
   const S = () => Store.getState();
   const esc = UI.esc;
+  const browseState = { key: '', query: '', page: 0 };
+  const BROWSE_PAGE_SIZE = 180;
 
   function isAdminView() {
     // 单用户模式：默认就是“所有者”，显示全部词库与最近动态。
@@ -30,7 +32,10 @@ const Views = (function () {
       { label: '错题本', value: st.errorBooks, icon: '📕' },
       { label: '经常错词', value: st.freqCount, icon: '🔥' }
     ];
-    let html = '<div class="page-head"><h1>首页</h1><p class="muted">坚持每天背一点，六级雅思都拿下。</p></div>';
+    const pendingErrors = s.errorBooks.reduce(function (sum, eb) { return sum + Store.getErrorBookCounts(eb).pending; }, 0);
+    let html = '<section class="home-hero"><div><span class="eyebrow">TODAY · 今日学习</span><h1>把每一次练习，变成真正记住。</h1><p>按自己的节奏积累词汇；答错会自动整理，同义说法也能越用越懂你。</p></div>';
+    html += '<div class="hero-actions"><button class="btn btn-primary btn-lg" data-action="goto-test">开始今日测试 →</button><button class="btn btn-lg" data-action="goto-books">继续学习</button></div>';
+    html += '<div class="hero-focus"><span>待复习错词</span><strong>' + pendingErrors + '</strong><small>只复习尚未攻克的词</small></div></section>';
     html += '<div class="stat-grid">' + cards.map(c =>
       '<div class="card stat-card"><div class="stat-icon">' + c.icon + '</div><div class="stat-body"><div class="stat-value">' + c.value + '</div><div class="stat-label">' + c.label + '</div></div></div>'
     ).join('') + '</div>';
@@ -167,10 +172,20 @@ const Views = (function () {
   }
 
   function studyBrowse(book, words, unitId) {
-    let html = '<div class="study-toolbar"><input type="search" id="studySearch" class="input" placeholder="搜索单词…" value=""><span class="muted small">' + words.length + ' 词</span></div>';
+    const key = book.id + '|' + (unitId || 'all');
+    if (browseState.key !== key) { browseState.key = key; browseState.query = ''; browseState.page = 0; }
+    const kw = browseState.query.trim().toLowerCase();
+    const filtered = kw ? words.filter(function (w) {
+      return (w.headword + ' ' + (w.phonetic || '') + ' ' + (w.senses || []).map(function (s) { return s.meaning || ''; }).join(' ')).toLowerCase().includes(kw);
+    }) : words;
+    const pages = Math.max(1, Math.ceil(filtered.length / BROWSE_PAGE_SIZE));
+    if (browseState.page >= pages) browseState.page = pages - 1;
+    const start = browseState.page * BROWSE_PAGE_SIZE;
+    const shown = filtered.slice(start, start + BROWSE_PAGE_SIZE);
+    let html = '<div class="study-toolbar"><input type="search" id="studySearch" class="input" placeholder="搜索英文、中文或音标…" value="' + esc(browseState.query) + '"><span class="muted small">' + (kw ? '找到 ' + filtered.length + ' / ' : '') + words.length + ' 词</span></div>';
     html += '<div class="word-list" id="wordList">';
     let lastGroup = null;
-    words.forEach(w => {
+    shown.forEach(w => {
       if (typeof w.group === 'number' && w.group !== lastGroup) {
         html += '<div class="group-header">词群 ' + (w.group + 1) + '</div>';
         lastGroup = w.group;
@@ -187,8 +202,17 @@ const Views = (function () {
         '</div>';
     });
     html += '</div>';
+    if (!shown.length) html += '<div class="card empty-state">没有找到匹配的单词，换个关键词试试。</div>';
+    if (pages > 1) {
+      html += '<div class="pager"><button class="btn" data-action="study-page" data-page="' + (browseState.page - 1) + '"' + (browseState.page <= 0 ? ' disabled' : '') + '>← 上一页</button>';
+      html += '<span class="muted small">第 ' + (browseState.page + 1) + ' / ' + pages + ' 页</span>';
+      html += '<button class="btn" data-action="study-page" data-page="' + (browseState.page + 1) + '"' + (browseState.page >= pages - 1 ? ' disabled' : '') + '>下一页 →</button></div>';
+    }
     return html;
   }
+
+  function setBrowseQuery(query) { browseState.query = query || ''; browseState.page = 0; }
+  function setBrowsePage(page) { browseState.page = Math.max(0, Number(page) || 0); }
 
   function studyCard(book, words, unitId) {
     if (!words.length) return '<p class="muted">该单元没有单词。</p>';
@@ -304,8 +328,8 @@ const Views = (function () {
     } else if (preset === 'error') {
       html += '<div class="form-group"><label>选择错题本</label><select class="input" id="testErrorBook">';
       s.errorBooks.forEach(eb => {
-        const cnt = Object.keys(eb.words).length;
-        if (cnt) html += '<option value="' + esc(eb.id) + '">' + esc(eb.name) + '（' + cnt + ' 词）</option>';
+        const cnt = Store.getErrorBookCounts(eb).pending;
+        if (cnt) html += '<option value="' + esc(eb.id) + '">' + esc(eb.name) + '（待复习 ' + cnt + ' 词）</option>';
       });
       html += '</select></div>';
       html += '<div id="testModeWrap"></div>';
@@ -358,7 +382,7 @@ const Views = (function () {
     } else {
       const ev = quiz.lastEv;
       const verdict = quiz.lastCorrect ? '答对 ✓' : '答错 ✗';
-      html += '<div class="quiz-verdict ' + (quiz.lastCorrect ? 'ok' : 'no') + '">' + verdict + (ev.matchedCount < ev.total ? '（答出 ' + ev.matchedCount + ' / ' + ev.total + ' 个意思）' : '') + '</div>';
+      html += '<div class="quiz-verdict ' + (quiz.lastCorrect ? 'ok' : 'no') + '">' + (ev.accepted ? '已纠正为正确 ✓' : verdict + (ev.matchedCount < ev.total ? '（答出 ' + ev.matchedCount + ' / ' + ev.total + ' 个意思）' : '')) + '</div>';
       if (quiz.lastInput) html += '<div class="quiz-your-answer">你的回答：' + esc(quiz.lastInput) + '</div>';
       // 逐义项揭示
       const ok = quiz.lastCorrect;
@@ -377,6 +401,11 @@ const Views = (function () {
       html += '</div>';
       if (ok && ev.missed.length) html += '<div class="quiz-note">✓ 已通过（答对一个意思即可）。＋ 标记的是它的其他说法/意思，可顺带记一下。</div>';
       if (!ok && ev.missed.length) html += '<div class="quiz-note miss">还有 ' + ev.missed.length + ' 个意思没记住，标 ✗ 的就是。</div>';
+      if (!ok && quiz.lastInput && quiz.lastInput.trim()) {
+        html += '<div class="answer-correction"><div><b>这个说法其实也对？</b><span class="muted small"> 点一下会撤销本次错题，并记住你的说法。</span></div>';
+        html += '<button class="btn btn-soft" data-action="accept-answer">✓ 接受我的答案</button></div>';
+      }
+      if (ev.accepted) html += '<div class="quiz-note accepted-note">已保存为该单词的可接受说法，以后会自动判对。</div>';
       // 答案出现时：加入重要单词本
       {
         const inImp = !!(s.important.words && s.important.words[w.id]);
@@ -434,7 +463,7 @@ const Views = (function () {
   // ---------- 错题本 ----------
   function errors() {
     const s = S();
-    let html = '<div class="page-head"><h1>错题本</h1><p class="muted">第一次测试的错词进「第1次错题本」；重测它再错的进它的子册，一轮轮缩小；整体二测单独成册；多次答错的自动进「经常错词本」。</p></div>';
+    let html = '<div class="page-head"><h1>错题本</h1><p class="muted">优先显示尚未掌握的词；复习答对后会标记为「已攻克」，下次不再重复出题。若系统误判同义答案，可在答题页直接纠正。</p></div>';
 
     // 重要单词本
     const impCount = Object.keys(s.important.words).length;
@@ -465,16 +494,18 @@ const Views = (function () {
       if (!hasAny) { html += '<div class="card"><p class="muted">还没有错题。去「测试」测一轮，错词会自动进这里。</p></div>'; return; }
 
       function renderNode(eb, depth) {
-        const cnt = Object.keys(eb.words).length;
-        const masteredCnt = Object.values(eb.words).filter(v => v.mastered).length;
-        if (!cnt && !depth) return '';
+        const counts = Store.getErrorBookCounts(eb);
+        const cnt = counts.total;
+        const masteredCnt = counts.mastered;
+        const pendingCnt = counts.pending;
+        if (!cnt) return '';
         let h = '<div class="card error-book-card" style="margin-left:' + (depth * 18) + 'px">';
         h += '<div class="eb-head">';
         h += '<div><span class="eb-name">' + esc(eb.name) + '</span>';
         const unitCounts = {};
         Object.keys(eb.words).forEach(wid => { const w = Store.getWord(wid); if (w) { const un = Store.unitNameOf(w); if (un) unitCounts[un] = (unitCounts[un] || 0) + 1; } });
         const unitSet = Object.keys(unitCounts);
-        h += '<span class="muted small">' + cnt + ' 词' + (masteredCnt ? ' · 已掌握 ' + masteredCnt : '') + ' · 第' + eb.round + '轮' + (unitSet.length ? ' · 覆盖 ' + unitSet.length + ' 个单元' : '') + '</span></div>';
+        h += '<div class="eb-counts"><span class="tag tag-red">待复习 ' + pendingCnt + '</span><span class="tag tag-green">已攻克 ' + masteredCnt + '</span><span class="muted small">共 ' + cnt + ' 词 · 第' + eb.round + '轮' + (unitSet.length ? ' · ' + unitSet.length + ' 个单元' : '') + '</span></div></div>';
         if (unitSet.length) {
           h += '<div class="chips eb-unit-chips">';
           unitSet.forEach(un => {
@@ -483,7 +514,8 @@ const Views = (function () {
           h += '</div>';
         }
         h += '<div class="eb-actions">';
-        h += '<button class="btn btn-sm btn-primary" data-action="test-errorbook" data-eb="' + esc(eb.id) + '">重测</button>';
+        if (pendingCnt) h += '<button class="btn btn-sm btn-primary" data-action="test-errorbook" data-eb="' + esc(eb.id) + '">复习待巩固</button>';
+        else h += '<span class="mastered-all">🎉 已全部攻克</span>';
         h += '<button class="btn btn-sm" data-action="view-errorbook" data-eb="' + esc(eb.id) + '">单词</button>';
         h += '<button class="btn btn-sm btn-danger" data-action="clear-errorbook" data-eb="' + esc(eb.id) + '">清空</button>';
         h += '</div></div></div>';
@@ -612,7 +644,7 @@ const Views = (function () {
     html += '<div class="form-group"><label>多义词判定</label><select class="input" id="setPolysemy">';
     html += '<option value="lenient"' + (set.polysemy === 'lenient' ? ' selected' : '') + '>宽松（推荐）：写出任意一个意思就算对，同义词也行</option>';
     html += '<option value="strict"' + (set.polysemy === 'strict' ? ' selected' : '') + '>严格：所有意思都答出才算对</option>';
-    html += '</select></div>';
+    html += '</select><p class="muted small">支持多个答案、常见近义说法。遇到仍被误判的答案，可点「接受我的答案」，系统会记住并撤销本次错题。</p></div>';
     html += '<div class="form-group"><label>经常错词收录阈值（累计答错次数）</label><select class="input" id="setFreqThreshold">';
     [2, 3, 4, 5].forEach(n => html += '<option value="' + n + '"' + (set.freqThreshold === n ? ' selected' : '') + '>' + n + ' 次</option>');
     html += '</select></div>';
@@ -720,6 +752,6 @@ const Views = (function () {
     UI.modal(html, { size: 'lg' });
   }
 
-  return { dashboard, books, study, test, errors, settings, wordModal, editWordModal, importModal, errorBookWordsModal, frequentModal, importantModal, wordContent, quizState: function(){ return quiz; }, setQuiz: function(q){ quiz = q; },
+  return { dashboard, books, study, test, errors, settings, wordModal, editWordModal, importModal, errorBookWordsModal, frequentModal, importantModal, wordContent, setBrowseQuery, setBrowsePage, quizState: function(){ return quiz; }, setQuiz: function(q){ quiz = q; },
   cardState: function(){ return cardState; }, setCardState: function(s){ cardState = Object.assign(cardState, s); } };
 })();

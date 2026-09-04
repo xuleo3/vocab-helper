@@ -41,8 +41,10 @@ const CloudSync = (function () {
   }
   function setLocalSavedAt(t) {
     const st = Store.getState();
-    st.sync = st.sync || { cloud: null, lastSavedAt: 0 };
+    st.sync = st.sync || { cloud: null, lastSavedAt: 0, localChangedAt: 0, dirty: false };
     st.sync.lastSavedAt = t;
+    st.sync.localChangedAt = t;
+    st.sync.dirty = false;
     Store.saveQuiet();
   }
 
@@ -69,6 +71,7 @@ const CloudSync = (function () {
   async function push() {
     const pass = passGet();
     if (!pass) throw new Error('请先在「设置」里填写同步口令');
+    if (!localMeaningful()) throw new Error('本机还没有学习进度，已阻止上传空数据');
     const savedAt = Date.now();
     await apiPost(pass, Store.exportSyncData(), savedAt);
     setLocalSavedAt(savedAt);
@@ -95,7 +98,10 @@ const CloudSync = (function () {
     const pass = passGet();
     if (!pass) throw new Error('请先在「设置」里填写同步口令');
     const j = await apiGet(pass);
+    const localState = Store.getState();
     const localAt = localSavedAt();
+    const localChangedAt = Number(localState.sync && localState.sync.localChangedAt) || 0;
+    const localDirty = !!(localState.sync && localState.sync.dirty);
     const cloudHasData = !!(j && !j.empty && j.data && payloadMeaningful(j.data));
     // 云端没有有效进度：本机有内容就上传；本机也没内容就不动（避免空设备抢建空云端）
     if (!cloudHasData) {
@@ -103,6 +109,15 @@ const CloudSync = (function () {
       return 'noop';
     }
     const cloudAt = Number(j.savedAt) || 0;
+    // 本机同步后又有新学习记录：按实际修改时间决定方向，不能只比较上次同步时间。
+    if (localDirty) {
+      if (cloudAt > localChangedAt) {
+        Store.importSyncData(j.data);
+        setLocalSavedAt(cloudAt);
+        return 'pulled';
+      }
+      if (localMeaningful()) { await push(); return 'pushed'; }
+    }
     if (cloudAt > localAt) {
       Store.importSyncData(j.data);
       setLocalSavedAt(cloudAt);

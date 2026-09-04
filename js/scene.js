@@ -104,9 +104,14 @@ const SceneStore = (function () {
     };
   }  function childrenOf(ebId) { return state.errorBooks.filter(function (b) { return b.parentId === ebId; }); }
   function getErrorBook(id) { return state.errorBooks.find(function (b) { return b.id === id; }) || null; }
-  function getErrorBookWords(eb) {
+  function getErrorBookWords(eb, pendingOnly) {
     if (!eb) return [];
-    return Object.keys(eb.words).map(function (id) { return state.words[id]; }).filter(Boolean);
+    return Object.keys(eb.words).filter(function (id) { return !pendingOnly || !eb.words[id].mastered; }).map(function (id) { return state.words[id]; }).filter(Boolean);
+  }
+  function getErrorBookCounts(eb) {
+    const entries = eb && eb.words ? Object.keys(eb.words).map(function (id) { return eb.words[id]; }) : [];
+    const mastered = entries.filter(function (e) { return !!e.mastered; }).length;
+    return { total: entries.length, mastered: mastered, pending: entries.length - mastered };
   }
   function childRound(parent) {
     const base = (parent && parent.round ? parent.round : 0) + 1;
@@ -211,8 +216,9 @@ const SceneStore = (function () {
     if (scope.preset === 'important') return 'scimp';
     return '';
   }
-  function saveTestSession(key, scope, answered) {
-    state.testSessions[key] = { scope: scope, answered: answered || [], startedAt: Date.now(), updatedAt: Date.now() };
+  function saveTestSession(key, scope, answered, progress) {
+    const old = state.testSessions[key];
+    state.testSessions[key] = { scope: scope, answered: answered || [], progress: progress || (old && old.progress) || null, startedAt: old ? old.startedAt : Date.now(), updatedAt: Date.now() };
     save();
   }
   function getTestSession(key) { return state.testSessions[key] || null; }
@@ -248,7 +254,7 @@ const SceneStore = (function () {
   return {
     getState, getScenes, getScene, getWord, getSceneWords, progress, overallStats,
     getPexelsKey, setPexelsKey,
-    childrenOf, getErrorBook, getErrorBookWords, ensureErrorBook, newSubErrorBook,
+    childrenOf, getErrorBook, getErrorBookWords, getErrorBookCounts, ensureErrorBook, newSubErrorBook,
     recordWrongWord, markCorrectWord, bumpWordStats, finishTestStats,
     removeErrorWord, clearErrorBook,
     toggleImportant, removeImportant, getImportantWords,
@@ -412,7 +418,7 @@ const SceneViews = (function () {
   }
 
   function quiz() {
-    const q = SceneApp.quiz;
+    const q = SceneApp.quizState();
     if (!q) return '<p class="muted">没有进行中的测试。</p>';
     const w = q.words[q.idx];
     const qn = q.idx + 1, total = q.words.length;
@@ -446,9 +452,9 @@ const SceneViews = (function () {
       html += '</div>';
     }
     html += '</div></div>';
-    return html;
+  return html;
   }  function result() {
-    const q = SceneApp.quiz;
+    const q = SceneApp.quizState();
     if (!q) return '<p class="muted">没有测试结果。</p>';
     const total = q.words.length;
     const acc = total ? Math.round(q.correct / total * 100) : 0;
@@ -475,7 +481,7 @@ const SceneViews = (function () {
 
   function errors() {
     const st = SceneStore.getState();
-    let html = '<div class="page-head"><h1>📕 生活场景错题本</h1><p class="muted">第一次测试的错词进「第1次错题本」；重测它再错的进子册，一轮轮缩小；整体二测单独成册；多次答错自动进「经常错词本」。</p></div>';
+    let html = '<div class="page-head"><h1>📕 生活场景错题本</h1><p class="muted">只重测尚未掌握的词；答对后自动标记为「已攻克」，下一轮不再重复出现。</p></div>';
 
     const impCount = Object.keys(st.important.words).length;
     html += '<div class="section-title"><h2>⭐ 重要单词本（' + impCount + '）</h2></div>';
@@ -493,14 +499,17 @@ const SceneViews = (function () {
       html += '<div class="section-title"><h2>' + sc.icon + ' ' + esc(sc.name) + ' 的错题本</h2></div>';
       if (!hasAny) { html += '<div class="card"><p class="muted">还没有错题。去测一轮，错词会自动进这里。</p></div>'; return; }
       function renderNode(eb, depth) {
-        const cnt = Object.keys(eb.words).length;
-        const masteredCnt = Object.keys(eb.words).filter(function (wid) { return eb.words[wid].mastered; }).length;
-        if (!cnt && !depth) return '';
+        const counts = SceneStore.getErrorBookCounts(eb);
+        const cnt = counts.total;
+        const masteredCnt = counts.mastered;
+        const pendingCnt = counts.pending;
+        if (!cnt) return '';
         let h = '<div class="card error-book-card" style="margin-left:' + (depth * 18) + 'px">';
         h += '<div class="eb-head"><div><span class="eb-name">' + esc(eb.name) + '</span>';
-        h += '<span class="muted small">' + cnt + ' 词' + (masteredCnt ? ' · 已掌握 ' + masteredCnt : '') + ' · 第' + eb.round + '轮</span></div>';
+        h += '<div class="eb-counts"><span class="tag tag-red">待复习 ' + pendingCnt + '</span><span class="tag tag-green">已攻克 ' + masteredCnt + '</span><span class="muted small">共 ' + cnt + ' 词 · 第' + eb.round + '轮</span></div></div>';
         h += '<div class="eb-actions">';
-        h += '<button class="btn btn-sm btn-primary" data-scene-action="scene-test-errorbook" data-eb="' + esc(eb.id) + '">重测</button>';
+        if (pendingCnt) h += '<button class="btn btn-sm btn-primary" data-scene-action="scene-test-errorbook" data-eb="' + esc(eb.id) + '">复习待巩固</button>';
+        else h += '<span class="mastered-all">🎉 已全部攻克</span>';
         h += '<button class="btn btn-sm" data-scene-action="scene-view-errorbook" data-eb="' + esc(eb.id) + '">单词</button>';
         h += '<button class="btn btn-sm btn-danger" data-scene-action="scene-clear-errorbook" data-eb="' + esc(eb.id) + '">清空</button>';
         h += '</div></div></div>';
@@ -606,14 +615,16 @@ const SceneViews = (function () {
 
   function startQuiz(words, scope) {
     let list = (words || []).slice();
-    if (scope.answeredIds && scope.answeredIds.length) {
-      const done = new Set(scope.answeredIds);
-      list = list.filter(function (w) { return !done.has(w.id); });
+    const resume = scope.resumeProgress || null;
+    if (resume && scope.wordIds && scope.wordIds.length) {
+      list = scope.wordIds.map(SceneStore.getWord).filter(Boolean);
+      if ((scope.answeredIds || []).length >= list.length) { UI.toast('这一轮已经全部完成，请重新开始', 'error'); return; }
+    } else {
+      if (!list.length) { UI.toast('没有可测试的单词', 'error'); return; }
+      if (scope.shuffle) shuffle(list);
+      if (scope.count && scope.count !== 'all' && list.length > parseInt(scope.count, 10)) list = list.slice(0, parseInt(scope.count, 10));
+      scope.wordIds = list.map(function (w) { return w.id; });
     }
-    if (!list.length) { UI.toast('没有可测试的单词（这一轮已全部测过，可重新开始）', 'error'); return; }
-    if (scope.shuffle) shuffle(list);
-    if (scope.count && scope.count !== 'all' && list.length > parseInt(scope.count, 10)) list = list.slice(0, parseInt(scope.count, 10));
-    scope.wordIds = list.map(function (w) { return w.id; });
     if (!scope.targetEbId) {
       if (scope.preset === 'scene') {
         const eb = SceneStore.ensureErrorBook({ sceneId: scope.sceneId, kind: scope.kind, parentId: scope.parentId || null });
@@ -627,8 +638,17 @@ const SceneViews = (function () {
     scope.resultEbId = scope.targetEbId || scope.parentEbId || null;
     if (!scope.sessionKey) scope.sessionKey = SceneStore.sessionKey(scope);
     if (!scope.answeredIds) scope.answeredIds = [];
-    SceneStore.saveTestSession(scope.sessionKey, scope, scope.answeredIds);
-    quiz = { words: list, idx: 0, results: [], correct: 0, wrong: 0, revealed: false, lastCorrect: false, lastInput: '', hint: false, scope: scope, resultBookName: '', startTime: Date.now() };
+    const restoredResults = resume && Array.isArray(resume.results) ? resume.results : [];
+    quiz = {
+      words: list,
+      idx: resume ? Math.min((scope.answeredIds || []).length, list.length - 1) : 0,
+      results: restoredResults,
+      correct: resume ? Number(resume.correct) || 0 : 0,
+      wrong: resume ? Number(resume.wrong) || 0 : 0,
+      revealed: false, lastCorrect: false, lastInput: '', hint: false, scope: scope, resultBookName: '', startTime: Date.now()
+    };
+    delete scope.resumeProgress;
+    SceneStore.saveTestSession(scope.sessionKey, scope, scope.answeredIds, { results: quiz.results, correct: quiz.correct, wrong: quiz.wrong });
     go('quiz');
   }
 
@@ -657,6 +677,8 @@ const SceneViews = (function () {
       scope.masterIn = saved.scope.masterIn;
       scope.ebName = saved.scope.ebName;
       scope.sessionKey = key;
+      scope.wordIds = (saved.scope.wordIds || []).slice();
+      scope.resumeProgress = saved.progress || { results: [], correct: 0, wrong: 0 };
       if (saved.scope.wordIds && saved.scope.wordIds.length) wordsQ = saved.scope.wordIds.map(SceneStore.getWord).filter(Boolean);
     } else {
       SceneStore.clearTestSession(key);
@@ -704,7 +726,11 @@ const SceneViews = (function () {
       else if (sc.preset === 'important') SceneStore.recordWrongWord({ sceneId: w.sceneId, kind: 'r1', wid: w.id });
       else SceneStore.recordWrongWord({ sceneId: sc.sceneId, kind: sc.kind, parentId: sc.parentId || null, targetEbId: sc.targetEbId, wid: w.id });
     }
-    if (sc.sessionKey) { if (!sc.answeredIds) sc.answeredIds = []; if (!sc.answeredIds.includes(w.id)) sc.answeredIds.push(w.id); SceneStore.saveTestSession(sc.sessionKey, sc, sc.answeredIds); }
+    if (sc.sessionKey) {
+      if (!sc.answeredIds) sc.answeredIds = [];
+      if (!sc.answeredIds.includes(w.id)) sc.answeredIds.push(w.id);
+      SceneStore.saveTestSession(sc.sessionKey, sc, sc.answeredIds, { results: quiz.results, correct: quiz.correct, wrong: quiz.wrong });
+    }
     App.render();
   }
   function next() {
@@ -742,8 +768,8 @@ const SceneViews = (function () {
   function testErrorBook(ebId) {
     const eb = SceneStore.getErrorBook(ebId);
     if (!eb) return;
-    const words = SceneStore.getErrorBookWords(eb);
-    if (!words.length) { UI.toast('该错题本没有单词', 'error'); return; }
+    const words = SceneStore.getErrorBookWords(eb, true);
+    if (!words.length) { UI.toast('这个错题本已经全部攻克了', 'error'); return; }
     startQuiz(words, { preset: 'error', sceneId: eb.sceneId, kind: 'sub', parentEbId: eb.id, shuffle: true, count: 'all', scopeLabel: eb.name });
   }
   function testFrequent() {
@@ -890,5 +916,5 @@ const SceneViews = (function () {
 
   bind();
 
-  return { html, afterRender, cardState };
+  return { html, afterRender, cardState, quizState: function () { return quiz; } };
 })();

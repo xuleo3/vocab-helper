@@ -5,6 +5,7 @@
 const App = (function () {
   let current = { view: 'dashboard', params: {} };
   let lastQuizSpoken = -2;
+  let studySearchTimer = null;
 
   function go(view, params) {
     current = { view: view, params: params || {} };
@@ -59,10 +60,14 @@ const App = (function () {
     const search = document.getElementById('studySearch');
     if (search) {
       search.addEventListener('input', function () {
-        const kw = search.value.trim().toLowerCase();
-        document.querySelectorAll('#wordList .word-row').forEach(row => {
-          row.style.display = row.textContent.toLowerCase().includes(kw) ? '' : 'none';
-        });
+        const value = search.value;
+        clearTimeout(studySearchTimer);
+        studySearchTimer = setTimeout(function () {
+          Views.setBrowseQuery(value);
+          render();
+          const next = document.getElementById('studySearch');
+          if (next) { next.focus(); next.setSelectionRange(next.value.length, next.value.length); }
+        }, 140);
       });
     }
     // 测试答题 Enter 提交
@@ -136,7 +141,7 @@ const App = (function () {
       total = scope.unitId ? Store.getUnitWords(scope.bookId, scope.unitId).length : Store.getBookWords(scope.bookId).length;
     } else if (preset === 'error' && scope.parentEbId) {
       const eb = Store.getErrorBook(scope.parentEbId);
-      total = eb ? Object.keys(eb.words).length : 0;
+      total = eb ? Store.getErrorBookCounts(eb).pending : 0;
     }
     const answered = (saved && saved.answered) ? saved.answered.length : 0;
     if (saved && saved.scope && saved.scope.wordIds && saved.scope.wordIds.length) total = saved.scope.wordIds.length;
@@ -202,15 +207,18 @@ const App = (function () {
 
   function buildQuiz(words, scope) {
     let list = (words || []).slice();
-    // 继续上次：过滤已测过的词
-    if (scope.answeredIds && scope.answeredIds.length) {
-      const done = new Set(scope.answeredIds);
-      list = list.filter(w => !done.has(w.id));
+    const resume = scope.resumeProgress || null;
+    if (resume && scope.wordIds && scope.wordIds.length) {
+      list = scope.wordIds.map(Store.getWord).filter(Boolean);
+      if ((scope.answeredIds || []).length >= list.length) {
+        UI.toast('这一轮已经全部完成，请选择「重新开始」', 'error'); return;
+      }
+    } else {
+      if (!list.length) { UI.toast('没有可测试的单词', 'error'); return; }
+      if (scope.shuffle) shuffle(list);
+      if (scope.count && scope.count !== 'all' && list.length > parseInt(scope.count, 10)) list = list.slice(0, parseInt(scope.count, 10));
+      scope.wordIds = list.map(w => w.id);
     }
-    if (!list.length) { UI.toast('没有可测试的单词（这一轮已全部测过，可重新开始）', 'error'); return; }
-    if (scope.shuffle) shuffle(list);
-    if (scope.count && scope.count !== 'all' && list.length > scope.count) list = list.slice(0, scope.count);
-    scope.wordIds = list.map(w => w.id);
     // 测试开始时先确定错题本目标（实现"答题实时进错题本"）；继续上次时沿用已保存目标
     if (!scope.targetEbId) {
     if (scope.preset === 'book') {
@@ -232,14 +240,21 @@ const App = (function () {
     // 测试会话：支持中断后"继续上次"
     if (!scope.sessionKey) scope.sessionKey = Store.sessionKey(scope);
     if (!scope.answeredIds) scope.answeredIds = [];
-    if (scope.sessionKey) Store.saveTestSession(scope.sessionKey, scope, scope.answeredIds);
+    const restoredResults = resume && Array.isArray(resume.results) ? resume.results : [];
+    const restoredCorrect = resume ? Number(resume.correct) || 0 : 0;
+    const restoredWrong = resume ? Number(resume.wrong) || 0 : 0;
+    const restoredIndex = resume ? Math.min((scope.answeredIds || []).length, list.length - 1) : 0;
     const q = {
-      words: list, idx: 0, results: [], correct: 0, wrong: 0,
+      words: list, idx: restoredIndex, results: restoredResults, correct: restoredCorrect, wrong: restoredWrong,
       revealed: false, lastCorrect: false, lastEv: null, lastInput: '',
       scope: scope, resultBookName: '', showPhonetic: scope.showPhonetic !== false,
       listen: !!scope.listen,
       startTime: Date.now()
     };
+    delete scope.resumeProgress;
+    if (scope.sessionKey) Store.saveTestSession(scope.sessionKey, scope, scope.answeredIds, {
+      results: q.results, correct: q.correct, wrong: q.wrong
+    });
     Views.setQuiz(q);
     go('test', { mode: 'quiz' });
   }
@@ -273,6 +288,8 @@ const App = (function () {
         scopeBook.ebName = savedBook.scope.ebName;
         scopeBook.listen = !!(book.kind === 'listening' && savedBook.scope.listen);
         scopeBook.sessionKey = keyBook;
+        scopeBook.wordIds = (savedBook.scope.wordIds || []).slice();
+        scopeBook.resumeProgress = savedBook.progress || { results: [], correct: 0, wrong: 0 };
         if (savedBook.scope.wordIds && savedBook.scope.wordIds.length) {
           wordsBook = savedBook.scope.wordIds.map(id => Store.getWord(id)).filter(Boolean);
         }
@@ -285,7 +302,7 @@ const App = (function () {
       const ebId = document.getElementById('testErrorBook').value;
       const eb = Store.getErrorBook(ebId);
       if (!eb) { UI.toast('请选择一个错题本', 'error'); return; }
-      const words = Store.getErrorBookWords(eb);
+      const words = Store.getErrorBookWords(eb, true);
       const ebBook = Store.getBook(eb.bookId);
       const scopeEb = {
         preset: 'error', bookId: eb.bookId, kind: 'sub', parentId: null, parentEbId: ebId,
@@ -304,6 +321,8 @@ const App = (function () {
         scopeEb.masterIn = savedEb.scope.masterIn;
         scopeEb.ebName = savedEb.scope.ebName;
         scopeEb.sessionKey = keyEb;
+        scopeEb.wordIds = (savedEb.scope.wordIds || []).slice();
+        scopeEb.resumeProgress = savedEb.progress || { results: [], correct: 0, wrong: 0 };
         if (savedEb.scope.wordIds && savedEb.scope.wordIds.length) {
           wordsEb = savedEb.scope.wordIds.map(id => Store.getWord(id)).filter(Boolean);
         }
@@ -351,14 +370,43 @@ const App = (function () {
       if (sc.masterIn) Store.markCorrectWord(w.id, sc.masterIn); else Store.markCorrectWord(w.id);
     } else {
       if (sc.preset === 'frequent') Store.bumpWordStats(w.id);
-      else if (sc.preset === 'important') Store.recordWrongWord({ bookId: w.bookId, kind: 'r1', parentId: null, wid: w.id, missedSenses: ev.missed });
-      else Store.recordWrongWord({ bookId: sc.bookId, kind: sc.kind, parentId: sc.parentId || null, targetEbId: sc.targetEbId, wid: w.id, missedSenses: ev.missed });
+      else if (sc.preset === 'important') {
+        const recorded = Store.recordWrongWord({ bookId: w.bookId, kind: 'r1', parentId: null, wid: w.id, missedSenses: ev.missed });
+        rec.errorBookId = recorded ? recorded.id : null;
+      } else {
+        const recorded = Store.recordWrongWord({ bookId: sc.bookId, kind: sc.kind, parentId: sc.parentId || null, targetEbId: sc.targetEbId, wid: w.id, missedSenses: ev.missed });
+        rec.errorBookId = recorded ? recorded.id : null;
+      }
     }
     // 保存测试会话进度
     if (sc.sessionKey && sc.answeredIds) {
       if (!sc.answeredIds.includes(w.id)) sc.answeredIds.push(w.id);
-      Store.saveTestSession(sc.sessionKey, sc, sc.answeredIds);
+      Store.saveTestSession(sc.sessionKey, sc, sc.answeredIds, { results: q.results, correct: q.correct, wrong: q.wrong });
     }
+    render();
+  }
+
+  function acceptCurrentAnswer() {
+    const q = Views.quizState();
+    if (!q || !q.revealed || q.lastCorrect) return;
+    const rec = q.results[q.idx];
+    const w = q.words[q.idx];
+    if (!rec || !w || !rec.input.trim()) { UI.toast('空答案不能设为同义说法', 'error'); return; }
+    Store.acceptAnswerAlias(w.id, rec.input, {
+      errorBookId: rec.errorBookId || q.scope.targetEbId || null,
+      masterInBookId: q.scope.masterIn || null
+    });
+    rec.correct = true;
+    rec.ev = Store.evaluateAnswer(w, rec.input);
+    rec.ev.accepted = true;
+    q.correct++;
+    q.wrong = Math.max(0, q.wrong - 1);
+    q.lastCorrect = true;
+    q.lastEv = rec.ev;
+    if (q.scope.sessionKey) Store.saveTestSession(q.scope.sessionKey, q.scope, q.scope.answeredIds, {
+      results: q.results, correct: q.correct, wrong: q.wrong
+    });
+    UI.toast('已记住这个说法，并撤销本次错题 ✓');
     render();
   }
 
@@ -420,6 +468,7 @@ const App = (function () {
     'browse-book': function (el) { cardStateReset(); go('study', { book: el.dataset.book, mode: 'browse' }); },
     'study-mode': function (el) { cardStateReset(); go('study', { book: el.dataset.book, mode: el.dataset.mode }); },
     'study-unit': function (el) { cardStateReset(); go('study', { book: el.dataset.book, unit: el.dataset.unit || '', mode: 'browse' }); },
+    'study-page': function (el) { Views.setBrowsePage(el.dataset.page); render(); window.scrollTo(0, 180); },
     'test-book': function (el) {
       const bk = Store.getBook(el.dataset.book);
       go('test', { preset: 'book', book: el.dataset.book, listen: !!(bk && bk.kind === 'listening') });
@@ -433,7 +482,7 @@ const App = (function () {
       const eb = Store.getErrorBook(el.dataset.eb);
       if (!eb) return;
       const unit = el.dataset.unit || '';
-      const words = Store.getErrorBookWords(eb).filter(w => w && Store.unitNameOf(w) === unit);
+      const words = Store.getErrorBookWords(eb, true).filter(w => w && Store.unitNameOf(w) === unit);
       if (!words.length) { UI.toast('该单元没有错词', 'error'); return; }
       UI.closeModal();
       const ebBook = Store.getBook(eb.bookId);
@@ -451,6 +500,7 @@ const App = (function () {
     'test-preset': function (el) { go('test', { preset: el.dataset.preset }); },
     'start-test': function (el) { startTest(el.dataset.preset); },
     'submit-answer': function () { submitAnswer(); },
+    'accept-answer': function () { acceptCurrentAnswer(); },
     'prev-question': function () { prevQuestion(); },
     'next-question': function () { nextQuestion(); },
     'finish-test': function () { finishTest(); },
@@ -598,7 +648,8 @@ const App = (function () {
   function testErrorBook(ebId) {
     const eb = Store.getErrorBook(ebId);
     if (!eb) return;
-    const words = Store.getErrorBookWords(eb);
+    const words = Store.getErrorBookWords(eb, true);
+    if (!words.length) { UI.toast('这个错题本已经全部攻克了', 'error'); return; }
     const ebBook = Store.getBook(eb.bookId);
     buildQuiz(words, {
       preset: 'error', bookId: eb.bookId, kind: 'sub', parentId: null, parentEbId: eb.id,
@@ -675,8 +726,11 @@ const App = (function () {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = 'vocab-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(a.href);
+    const href = a.href;
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(href); }, 1000);
   }
   function importData() {
     const input = document.createElement('input');

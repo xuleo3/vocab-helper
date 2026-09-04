@@ -13,6 +13,7 @@ const Store = (function () {
       frequent: { words: {} },  // wid -> {wrongCount,firstAt,lastAt,manual}
       important: { words: {} },  // 重要单词本：wid -> {addedAt}
       testSessions: {},  // 进行中的测试会话：key -> {scope, answered, startedAt, updatedAt}
+      answerAliases: {}, // wid -> [用户确认可接受的中文说法]
       mastered: {},     // wid -> ts
       wordStats: {},    // wid -> {wrongCount,firstAt,lastAt}
       settings: {
@@ -22,7 +23,7 @@ const Store = (function () {
       builtinVersion: 0,
       wangluVersion: 0,
       settingsVersion: 1,
-      sync: { cloud: null, lastSavedAt: 0 },
+      sync: { cloud: null, lastSavedAt: 0, localChangedAt: 0, dirty: false },
       stats: { testsTaken: 0, answered: 0, correct: 0, startDate: Date.now() },
       activity: []      // [{time,text,kind}]
     };
@@ -41,9 +42,11 @@ const Store = (function () {
     state.frequent = state.frequent || { words: {} };
     state.important = state.important || { words: {} };
     state.testSessions = state.testSessions || {};
+    state.answerAliases = state.answerAliases || {};
     state.activity = state.activity || [];
     state.errorBooks = state.errorBooks || [];
     state.mastered = state.mastered || {};
+    state.sync = Object.assign(d.sync, state.sync || {});
     return state;
   }
 
@@ -52,6 +55,9 @@ const Store = (function () {
     catch (e) { if (window.UI) UI.toast('保存失败：浏览器存储空间不足', 'error'); }
   }
   function save() {
+    state.sync = state.sync || { cloud: null, lastSavedAt: 0, localChangedAt: 0, dirty: false };
+    state.sync.localChangedAt = Date.now();
+    state.sync.dirty = true;
     persist();
     // 云同步：本地有变化时自动上传（由 CloudSync 去重/节流）
     if (window.CloudSync) CloudSync.onLocalSave();
@@ -113,9 +119,16 @@ const Store = (function () {
     return u.wordIds.map(id => getWord(id)).filter(Boolean);
   }
   function getErrorBook(id) { return state.errorBooks.find(b => b.id === id) || null; }
-  function getErrorBookWords(eb) {
+  function getErrorBookWords(eb, pendingOnly) {
     if (!eb) return [];
-    return Object.keys(eb.words).map(id => getWord(id)).filter(Boolean);
+    return Object.keys(eb.words).filter(function (id) {
+      return !pendingOnly || !eb.words[id].mastered;
+    }).map(id => getWord(id)).filter(Boolean);
+  }
+  function getErrorBookCounts(eb) {
+    const entries = eb && eb.words ? Object.values(eb.words) : [];
+    const mastered = entries.filter(function (e) { return !!e.mastered; }).length;
+    return { total: entries.length, mastered: mastered, pending: entries.length - mastered };
   }
   // 单词所属单元名称 / 按名称找单元 id
   function unitNameOf(w) {
@@ -310,8 +323,15 @@ const Store = (function () {
     if (scope.preset === 'important') return 'imp';
     return '';
   }
-  function saveTestSession(key, scope, answered) {
-    state.testSessions[key] = { scope: scope, answered: answered || [], startedAt: Date.now(), updatedAt: Date.now() };
+  function saveTestSession(key, scope, answered, progress) {
+    const old = state.testSessions[key];
+    state.testSessions[key] = {
+      scope: scope,
+      answered: answered || [],
+      progress: progress || (old && old.progress) || null,
+      startedAt: old ? old.startedAt : Date.now(),
+      updatedAt: Date.now()
+    };
     save();
   }
   function getTestSession(key) { return state.testSessions[key] || null; }
@@ -330,6 +350,12 @@ const Store = (function () {
   // ---------- 语义判分 ----------
   function normalize(s) {
     return (s || '').toLowerCase().replace(/[\s\u3000，。、；;：:,.!！?？()（）\[\]\"'“”‘’\-—\/]+/g, '').trim();
+  }
+  function answerParts(s) {
+    const parts = (s || '').split(/[\n，,、；;\/]|(?:或者|或是|也就是|即)/).map(normalize).filter(Boolean);
+    const whole = normalize(s);
+    if (whole && !parts.includes(whole)) parts.push(whole);
+    return parts;
   }
   function senseTokens(meaning) {
     return (meaning || '').split(/[，,、；;\/]/).map(s => normalize(s)).filter(s => s.length > 0);
@@ -350,49 +376,112 @@ const Store = (function () {
     }
     return dp[m][n];
   }
-  // 中文模糊匹配：同义/近义也算对
+  const EQUIVALENT_GROUPS = [
+    ['放弃','抛弃','舍弃','摒弃'], ['获得','得到','取得','获取'], ['购买','买','采购','购置'],
+    ['开始','起始','着手','启动'], ['结束','终止','完毕','停止'], ['帮助','协助','援助','帮忙'],
+    ['选择','挑选','选取'], ['改变','改动','转变','变更'], ['提高','提升','增强','增进'],
+    ['减少','降低','削减','缩减'], ['说明','解释','阐明','讲明'], ['证明','证实','验证'],
+    ['认为','觉得','以为','认定'], ['允许','许可','准许'], ['需要','需求','需'],
+    ['理解','明白','懂','领悟'], ['重要','关键','要紧'], ['困难','艰难','难'],
+    ['快速','迅速','很快','飞快'], ['可能','也许','或许'], ['保持','维持','保留'],
+    ['建立','创建','创立','设立'], ['包含','包括','含有'], ['显示','展示','表明'],
+    ['拒绝','回绝','谢绝'], ['承认','认可','认同'], ['错误','过错','差错'],
+    ['立即','立刻','马上','即刻'], ['尤其','特别','格外'], ['通常','一般','往往']
+  ];
+  function phraseCore(s) {
+    let out = normalize(s);
+    out = out.replace(/^(使|让|把|将|进行|加以|予以)/, '');
+    if (out.length >= 3) out = out.replace(/[的地了着过]$/g, '');
+    return out;
+  }
+  function equivalent(a, b) {
+    return EQUIVALENT_GROUPS.some(function (g) { return g.includes(a) && g.includes(b); });
+  }
+  function bigramDice(a, b) {
+    if (a.length < 2 || b.length < 2) return 0;
+    const aa = [], bb = [];
+    for (let i = 0; i < a.length - 1; i++) aa.push(a.slice(i, i + 2));
+    for (let j = 0; j < b.length - 1; j++) bb.push(b.slice(j, j + 2));
+    let hit = 0; const copy = bb.slice();
+    aa.forEach(function (x) { const k = copy.indexOf(x); if (k >= 0) { hit++; copy.splice(k, 1); } });
+    return (2 * hit) / (aa.length + bb.length);
+  }
+  // 中文智能匹配：兼顾近义表达，也避免单字包含造成误判
   function fuzzyMatch(input, token) {
     if (!input || !token) return false;
     if (input === token) return true;
-    if (input.includes(token) || token.includes(input)) return true;
-    const strip = function (s) { return s.replace(/[的地得了着过]$/g, ''); };
-    const ai = strip(input), at = strip(token);
+    const ai = phraseCore(input), at = phraseCore(token);
     if (ai === at) return true;
-    if (ai.length >= 2 && at.length >= 2) {
+    if (equivalent(ai, at)) return true;
+    const minLen = Math.min(ai.length, at.length);
+    const maxLen = Math.max(ai.length, at.length);
+    if (minLen >= 3 && (ai.includes(at) || at.includes(ai))) return true;
+    if (minLen >= 3) {
       const d = lev(ai, at);
-      if (d <= 1) return true;
-      if (ai.length === at.length && ai[ai.length - 1] === at[at.length - 1] && d <= 2) return true;
+      if (d <= 1 || bigramDice(ai, at) >= 0.72) return true;
     }
     return false;
   }
-  function senseMatched(word, senseIdx, inputNorm) {
+  function senseMatched(word, senseIdx, inputs) {
     const sense = (word.senses || [])[senseIdx];
-    if (!sense || !inputNorm) return false;
+    if (!sense || !inputs.length) return false;
     const tokens = senseTokens(sense.meaning);
-    for (const t of tokens) {
-      if (fuzzyMatch(inputNorm, t)) return true;
-    }
-    const syns = (word.synonyms || []).map(s => normalize(s)).filter(Boolean);
-    for (const s of syns) {
-      if (inputNorm === s) return true;
-      if (s.length >= 3 && (inputNorm.includes(s) || s.includes(inputNorm))) return true;
+    for (const input of inputs) {
+      for (const t of tokens) {
+        if (fuzzyMatch(input, t)) return true;
+      }
     }
     return false;
   }
   function evaluateAnswer(word, input) {
     const n = normalize(input);
+    const inputs = answerParts(input);
     const total = (word.senses || []).length || 1;
-    const matched = (word.senses || []).map((_, i) => senseMatched(word, i, n));
+    const matched = (word.senses || []).map((_, i) => senseMatched(word, i, inputs));
+    const aliases = (state.answerAliases[word.id] || []).map(normalize).filter(Boolean);
+    const aliasAccepted = inputs.some(function (part) { return aliases.some(function (a) { return fuzzyMatch(part, a); }); });
+    if (aliasAccepted && matched.length && !matched.some(Boolean)) matched[0] = true;
     const hasMeaning = (word.senses || []).some(s => (s.meaning || '').trim().length > 0);
     const matchedCount = matched.filter(Boolean).length;
     const any = hasMeaning ? matchedCount > 0 : true;
-    const all = hasMeaning ? matchedCount === total : true;
+    const all = hasMeaning ? (aliasAccepted || matchedCount === total) : true;
     const missed = (word.senses || []).map((_, i) => i).filter(i => !matched[i]);
-    return { matched, matchedCount, total, any, all, missed, inputNorm: n };
+    return { matched, matchedCount, total, any, all, missed, inputNorm: n, parts: inputs, aliasAccepted: aliasAccepted };
   }
   function isCorrect(word, ev) {
     if (!ev) return false;
     return state.settings.polysemy === 'strict' ? ev.all : ev.any;
+  }
+
+  function acceptAnswerAlias(wid, input, opts) {
+    const alias = (input || '').trim();
+    if (!wid || !normalize(alias)) return false;
+    const list = state.answerAliases[wid] || (state.answerAliases[wid] = []);
+    if (!list.some(function (x) { return normalize(x) === normalize(alias); })) list.push(alias);
+    opts = opts || {};
+    if (opts.errorBookId) {
+      const eb = getErrorBook(opts.errorBookId);
+      const entry = eb && eb.words[wid];
+      if (entry) {
+        entry.wrongCount = Math.max(0, (entry.wrongCount || 0) - 1);
+        if (!entry.wrongCount) delete eb.words[wid];
+      }
+    }
+    const ws = state.wordStats[wid];
+    if (ws) {
+      ws.wrongCount = Math.max(0, (ws.wrongCount || 0) - 1);
+      if (!ws.wrongCount) delete state.wordStats[wid];
+    }
+    const fr = state.frequent.words[wid];
+    const nowWrong = state.wordStats[wid] ? state.wordStats[wid].wrongCount : 0;
+    if (fr && !fr.manual && nowWrong < state.settings.freqThreshold) delete state.frequent.words[wid];
+    if (state.settings.autoMaster) state.mastered[wid] = Date.now();
+    if (opts.masterInBookId) {
+      const parent = getErrorBook(opts.masterInBookId);
+      if (parent && parent.words[wid]) parent.words[wid].mastered = true;
+    }
+    save();
+    return true;
   }
 
   // ---------- 导入词库（由 importer 调用） ----------
@@ -490,6 +579,7 @@ const Store = (function () {
       frequent: state.frequent,
       wordStats: state.wordStats,
       testSessions: state.testSessions,
+      answerAliases: state.answerAliases,
       stats: state.stats,
       settings: state.settings,
       activity: state.activity
@@ -499,7 +589,7 @@ const Store = (function () {
   function importSyncData(json) {
     const parsed = JSON.parse(json);
     if (!parsed || parsed.syncVersion !== 2) throw new Error('不是有效的云同步数据');
-    ['mastered', 'errorBooks', 'important', 'frequent', 'wordStats', 'testSessions', 'stats', 'settings', 'activity'].forEach(function (k) {
+    ['mastered', 'errorBooks', 'important', 'frequent', 'wordStats', 'testSessions', 'answerAliases', 'stats', 'settings', 'activity'].forEach(function (k) {
       if (parsed[k] !== undefined) state[k] = parsed[k];
     });
     saveQuiet();
@@ -518,14 +608,14 @@ const Store = (function () {
 
   return {
     getState, getWord, getBook, getBookWords, getUnitWords, getErrorBook, getErrorBookWords,
-    getFrequentWords, childrenOf, totalWrong,
+    getFrequentWords, childrenOf, totalWrong, getErrorBookCounts,
     ensureErrorBook, newSubErrorBook, recordTest, removeErrorWord, clearErrorBook,
     toggleFrequent, removeFrequent, markMastered, addActivity,
     toggleImportant, removeImportant, getImportantWords,
     unitNameOf, getUnitIdByName,
     recordWrongWord, markCorrectWord, bumpWordStats, finishTestStats,
     sessionKey, saveTestSession, getTestSession, clearTestSession,
-    evaluateAnswer, isCorrect, normalize,
+    evaluateAnswer, isCorrect, normalize, acceptAnswerAlias,
     addImportedBook, deleteBook, updateWord, setSettings, setTheme,
     exportData, importData, resetAll, progress, overallStats,
     saveQuiet, getCloud, setCloud,
