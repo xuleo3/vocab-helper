@@ -541,6 +541,7 @@ const App = (function () {
       CloudSync.sync().then(function (res) {
         if (res === 'pulled') { UI.toast('已下载最新进度 ☁️'); App.render(); }
         else if (res === 'pushed') { UI.toast('已上传进度 ☁️'); }
+        else if (res === 'noop') { UI.toast('云端还没有进度：请先在「有你进度的设备」上点 ⬆️ 上传进度', 'error'); }
         else { UI.toast('两边已是最新 ✓'); }
       }).catch(function (e) { UI.toast('同步失败：' + e.message, 'error'); });
     },

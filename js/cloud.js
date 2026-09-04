@@ -46,6 +46,25 @@ const CloudSync = (function () {
     Store.saveQuiet();
   }
 
+  // 判断一份进度数据是否“真的有内容”（防止空设备把空数据同步上来覆盖真进度）
+  function payloadMeaningful(dataStr) {
+    try {
+      const p = JSON.parse(dataStr);
+      if (!p || typeof p !== 'object') return false;
+      if (p.mastered && Object.keys(p.mastered).length) return true;
+      if (p.wordStats && Object.keys(p.wordStats).length) return true;
+      if (p.errorBooks && p.errorBooks.some(function (b) { return b && b.words && Object.keys(b.words).length; })) return true;
+      if (p.important && p.important.words && Object.keys(p.important.words).length) return true;
+      if (p.frequent && p.frequent.words && Object.keys(p.frequent.words).length) return true;
+      if (p.activity && p.activity.length) return true;
+      if (p.stats && ((p.stats.answered || 0) > 0 || (p.stats.testsTaken || 0) > 0)) return true;
+      return false;
+    } catch (e) { return false; }
+  }
+  function localMeaningful() {
+    try { return payloadMeaningful(Store.exportSyncData()); } catch (e) { return false; }
+  }
+
   // 上传本地进度到云端（只传学习进度，不传词库，体积小）
   async function push() {
     const pass = passGet();
@@ -61,7 +80,8 @@ const CloudSync = (function () {
     const pass = passGet();
     if (!pass) throw new Error('请先在「设置」里填写同步口令');
     const j = await apiGet(pass);
-    if (!j || j.empty || !j.data) return 'empty';
+    // 云端没数据，或云端是一份“空进度”：不下载，避免把有进度的本机清空
+    if (!j || j.empty || !j.data || !payloadMeaningful(j.data)) return 'empty';
     const cloudAt = Number(j.savedAt) || 0;
     const localAt = localSavedAt();
     if (localAt > 0 && cloudAt <= localAt) return 'up-to-date';
@@ -76,14 +96,22 @@ const CloudSync = (function () {
     if (!pass) throw new Error('请先在「设置」里填写同步口令');
     const j = await apiGet(pass);
     const localAt = localSavedAt();
-    if (!j || j.empty || !j.data) { await push(); return 'pushed'; }
+    const cloudHasData = !!(j && !j.empty && j.data && payloadMeaningful(j.data));
+    // 云端没有有效进度：本机有内容就上传；本机也没内容就不动（避免空设备抢建空云端）
+    if (!cloudHasData) {
+      if (localMeaningful()) { await push(); return 'pushed'; }
+      return 'noop';
+    }
     const cloudAt = Number(j.savedAt) || 0;
     if (cloudAt > localAt) {
       Store.importSyncData(j.data);
       setLocalSavedAt(cloudAt);
       return 'pulled';
     }
-    if (cloudAt < localAt) { await push(); return 'pushed'; }
+    if (cloudAt < localAt) {
+      if (localMeaningful()) { await push(); return 'pushed'; }
+      return 'noop';
+    }
     return 'same';
   }
 
