@@ -84,6 +84,25 @@ const App = (function () {
     // 设置控件
     bindSettings();
     bindCloud();
+    // 学习默写练习面板
+    const prInput = document.getElementById('practiceInput');
+    if (prInput && !prInput.dataset.boundP) {
+      prInput.dataset.boundP = '1';
+      prInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); doPracticeCheck(); }
+      });
+    }
+    if (prInput) { try { prInput.focus(); } catch (e) {} }
+    const pw = Views.getStudyWord();
+    if (pw) {
+      const pdEl = document.querySelector('input[name="practiceDir"]:checked');
+      const pd = pdEl ? pdEl.value : 'zh2en';
+      const pQ = document.getElementById('practiceQ');
+      if (pQ) pQ.textContent = pd === 'en2zh' ? '✍️ 默写：' + pw.headword : '✍️ 默写：' + (((pw.senses && pw.senses[0]) || {}).meaning || '');
+    }
+    document.querySelectorAll('input[name="practiceDir"]').forEach(function (r) {
+      if (!r.dataset.boundP) { r.dataset.boundP = '1'; r.addEventListener('change', function () { render(); }); }
+    });
 
     // 测试题自动发音（新题出现时朗读）
     const qA = Views.quizState();
@@ -598,6 +617,8 @@ const App = (function () {
     'card-next': function () { cardMove(1); },
     'card-know': function () { cardMark(true); },
     'card-unknown': function () { cardMark(false); },
+    'study-practice-toggle': function () { Views.toggleStudyPractice(); render(); },
+    'practice-check': function () { doPracticeCheck(); },
     'toggle-theme': function () { toggleTheme(); },
     'export-data': function () { exportData(); },
     'import-data': function () { importData(); },
@@ -774,6 +795,30 @@ const App = (function () {
       reader.readAsText(f, 'utf-8');
     };
     input.click();
+  }
+
+  // 学习页：默写练习检查（键盘助记，不记错题）
+  function doPracticeCheck() {
+    const inputEl = document.getElementById('practiceInput');
+    const fb = document.getElementById('practiceFb');
+    const w = Views.getStudyWord();
+    if (!inputEl || !fb || !w) return;
+    const dirEl = document.querySelector('input[name="practiceDir"]:checked');
+    const dir = dirEl ? dirEl.value : 'zh2en';
+    const val = inputEl.value;
+    if (!val.trim()) { UI.toast('先输入答案再检查', 'error'); return; }
+    let ok = false; let show = '';
+    if (dir === 'zh2en') {
+      const ev = Store.evaluateEn(w, val);
+      ok = ev.correct;
+      show = '英文：' + (ev.expected && ev.expected.length ? ev.expected.join(' / ') : w.headword);
+    } else {
+      const ev = Store.evaluateAnswer(w, val);
+      ok = Store.isCorrect(w, ev);
+      show = '意思：' + (w.senses || []).map(function (s) { return s.meaning; }).join('；');
+    }
+    fb.innerHTML = (ok ? '<div class="quiz-verdict ok">✓ 正确！</div>' : '<div class="quiz-verdict no">✗ 不对，再想想</div>') + '<div class="muted small">' + UI.esc(show) + '</div>';
+    if (ok) inputEl.select();
   }
 
   // ================= 全局事件绑定 =================

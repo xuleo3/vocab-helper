@@ -526,3 +526,8 @@ button { -webkit-tap-highlight-color: transparent; }
   .modal-foot { overflow-x: auto; justify-content: flex-start; padding: 12px 14px; }
   #toastRoot { bottom: calc(76px + env(safe-area-inset-bottom)); }
 }
+
+/* ---- 学习页默写练习 ---- */
+.practice-card { margin-top: 10px; }
+#practiceQ { font-weight: 600; margin: 6px 0 8px; font-size: 1.1rem; line-height: 1.5; }
+.practice-fb { margin-top: 6px; }

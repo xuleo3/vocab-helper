@@ -221,6 +221,7 @@ const Views = (function () {
     if (cardState.index >= words.length) cardState.index = 0;
     const idx = cardState.index;
     const w = words[idx];
+    lastStudyWid = w.id;
     const s = S();
     const mastered = !!s.mastered[w.id];
     const inFreq = !!s.frequent.words[w.id];
@@ -243,9 +244,30 @@ const Views = (function () {
     html += '<button class="btn btn-success' + (mastered ? ' on' : '') + '" data-action="card-know">认识 ✓</button>';
     html += '<button class="btn btn-danger' + (inFreq ? ' on' : '') + '" data-action="card-unknown">不认识 ✗</button>';
     html += '</div>';
-    html += '<p class="muted small center">翻面自动发音；点「认识」标记掌握并下一张；点「不认识」加入经常错词本。</p>';
+    html += '<div class="btn-row center">';
+    html += '<button class="btn' + (studyPractice ? ' btn-primary' : '') + '" data-action="study-practice-toggle">✍️ 默写练习（键盘助记）</button>';
+    html += '</div>';
+    if (studyPractice) html += practicePanel(w);
+    html += '<p class="muted small center">翻面自动发音；点「认识」标记掌握并下一张；点「不认识」加入经常错词本。默写练习只用来帮自己记忆，不记入错题本。</p>';
     html += '</div>';
     return html;
+  }
+
+  // 学习卡片内嵌的“默写练习（打字助记）”面板
+  function practicePanel(w) {
+    const zh = (w.senses && w.senses[0] && w.senses[0].meaning) || '';
+    let h = '<div class="card form-card practice-card">';
+    h += '<div class="form-group"><label>✍️ 默写练习 · 用键盘打出答案帮助记忆</label></div>';
+    h += '<div class="form-group"><div class="radio-row">';
+    h += '<label class="radio"><input type="radio" name="practiceDir" value="zh2en" checked> 中文→英文</label>';
+    h += '<label class="radio"><input type="radio" name="practiceDir" value="en2zh"> 英文→中文</label>';
+    h += '</div></div>';
+    h += '<div class="quiz-word quiz-word-zh" id="practiceQ">' + esc(zh) + '</div>';
+    h += '<div class="btn-row" style="align-items:center"><input class="input" id="practiceInput" placeholder="用键盘打出答案，回车检查"><button class="btn btn-primary" data-action="practice-check">检查</button></div>';
+    h += '<div id="practiceFb" class="practice-fb"></div>';
+    h += '<p class="muted small">只看中文默写英文（或反着），检验自己能不能写出来；不影响掌握状态与错题本。</p>';
+    h += '</div>';
+    return h;
   }
 
   // 重要单词本按钮（☆/★）
@@ -289,6 +311,8 @@ const Views = (function () {
   // 会话状态
   let quiz = null;
   let cardState = { index: 0, flipped: false };
+  let studyPractice = false;
+  let lastStudyWid = null;
 
   function test(params) {
     params = params || {};
@@ -791,5 +815,8 @@ const Views = (function () {
   }
 
   return { dashboard, books, study, test, errors, settings, wordModal, editWordModal, importModal, errorBookWordsModal, frequentModal, importantModal, wordContent, setBrowseQuery, setBrowsePage, quizState: function(){ return quiz; }, setQuiz: function(q){ quiz = q; },
-  cardState: function(){ return cardState; }, setCardState: function(s){ cardState = Object.assign(cardState, s); } };
+  cardState: function(){ return cardState; }, setCardState: function(s){ cardState = Object.assign(cardState, s); },
+  toggleStudyPractice: function(){ studyPractice = !studyPractice; return studyPractice; },
+  getStudyPractice: function(){ return studyPractice; },
+  getStudyWord: function(){ return lastStudyWid ? Store.getWord(lastStudyWid) : null; } };
 })();
