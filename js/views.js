@@ -103,13 +103,13 @@ const Views = (function () {
       return '<div class="card book-card">' +
         '<div class="book-card-head">' +
         '<div><div class="book-title">' + esc(b.name) + '</div>' +
-        '<div class="muted small">' + UI.examBadge(b.examType) + (b.kind === 'listening' ? ' <span class="tag tag-blue">听音写意</span>' : '') + ' ' + (b.source === 'builtin' ? '内置' : '导入') + ' · ' + b.wordIds.length + ' 词 · ' + b.units.length + ' 单元</div></div>' +
+        '<div class="muted small">' + UI.examBadge(b.examType) + (b.kind === 'listening' ? ' <span class="tag tag-blue">听音写意</span>' : '') + (b.kind === 'oral' ? ' <span class="tag tag-blue">日常口语 · 无测试</span>' : '') + ' ' + (b.source === 'builtin' ? '内置' : '导入') + ' · ' + b.wordIds.length + ' 句/词 · ' + b.units.length + ' 单元</div></div>' +
         '</div>' +
         '<div class="progress"><div class="progress-bar" style="width:' + p.pct + '%"></div></div>' +
-        '<div class="muted small">已掌握 ' + p.learned + '/' + p.total + ' · 错题 ' + errCount + '</div>' +
+        '<div class="muted small">已学 ' + p.learned + '/' + p.total + (b.kind !== 'oral' ? ' · 错题 ' + errCount : '') + '</div>' +
         '<div class="book-card-actions">' +
-        '<button class="btn btn-sm" data-action="study-book" data-book="' + esc(b.id) + '">学习</button>' +
-        '<button class="btn btn-sm btn-primary" data-action="test-book" data-book="' + esc(b.id) + '">' + (b.kind === 'listening' ? '🔊 听音写意' : '测试') + '</button>' +
+        '<button class="btn btn-sm" data-action="study-book" data-book="' + esc(b.id) + '">' + (b.kind === 'oral' ? '💬 一句一句学' : '学习') + '</button>' +
+        (b.kind === 'oral' ? '' : '<button class="btn btn-sm btn-primary" data-action="test-book" data-book="' + esc(b.id) + '">' + (b.kind === 'listening' ? '🔊 听音写意' : '测试') + '</button>') +
         '<button class="btn btn-sm" data-action="browse-book" data-book="' + esc(b.id) + '">词表</button>' +
         (b.source === 'imported' ? '<button class="btn btn-sm btn-danger" data-action="delete-book" data-book="' + esc(b.id) + '">删除</button>' : '') +
         '</div></div>';
@@ -162,8 +162,8 @@ const Views = (function () {
       html += '<button class="chip' + (unitId === u.id ? ' chip-active' : '') + '" data-action="study-unit" data-book="' + esc(bookId) + '" data-unit="' + esc(u.id) + '">' + esc(u.name) + '</button>';
     });
     html += '</div>';
-    html += '<div class="study-typing-toggle"><label class="check"><input type="checkbox" id="keyTypingToggle"' + (S().settings.keyTyping ? ' checked' : '') + '> ✍️ 键盘默写（在列表/卡片里打字助记，长期保留，可随时关闭）</label></div>';
-    if (unitId) {
+    if (book.kind !== 'oral') html += '<div class="study-typing-toggle"><label class="check"><input type="checkbox" id="keyTypingToggle"' + (S().settings.keyTyping ? ' checked' : '') + '> ✍️ 键盘默写（在列表/卡片里打字助记，长期保留，可随时关闭）</label></div>';
+    if (unitId && book.kind !== 'oral') {
       const un = book.units.find(u => u.id === unitId);
       html += '<div class="btn-row"><button class="btn btn-primary" data-action="test-book-unit" data-book="' + esc(bookId) + '" data-unit="' + esc(unitId) + '">📝 测试本章节' + (un ? '（' + esc(un.name) + '）' : '') + '</button></div>';
     }
@@ -187,7 +187,7 @@ const Views = (function () {
     let html = '<div class="study-toolbar"><input type="search" id="studySearch" class="input" placeholder="搜索英文、中文或音标…" value="' + esc(browseState.query) + '"><span class="muted small">' + (kw ? '找到 ' + filtered.length + ' / ' : '') + words.length + ' 词</span></div>';
     html += '<div class="word-list" id="wordList">';
     let lastGroup = null;
-    const typing = !!S().settings.keyTyping;
+    const typing = !!S().settings.keyTyping && book.kind !== 'oral';
     shown.forEach(w => {
       if (typeof w.group === 'number' && w.group !== lastGroup) {
         html += '<div class="group-header">词群 ' + (w.group + 1) + '</div>';
@@ -258,7 +258,7 @@ const Views = (function () {
     html += '<button class="btn btn-success' + (mastered ? ' on' : '') + '" data-action="card-know">认识 ✓</button>';
     html += '<button class="btn btn-danger' + (inFreq ? ' on' : '') + '" data-action="card-unknown">不认识 ✗</button>';
     html += '</div>';
-    if (S().settings.keyTyping) html += practicePanel(w);
+    if (book.kind !== 'oral' && S().settings.keyTyping) html += practicePanel(w);
     html += '<p class="muted small center">翻面自动发音；点「认识」标记掌握并下一张；点「不认识」加入经常错词本。默写练习只用来帮自己记忆，不记入错题本。</p>';
     html += '</div>';
     return html;
@@ -349,7 +349,7 @@ const Views = (function () {
 
     if (preset === 'book') {
       html += '<div class="form-group"><label>词库</label><select class="input" id="testBook">';
-      visibleBooks().forEach(b => { html += '<option value="' + esc(b.id) + '"' + (b.id === presetBook ? ' selected' : '') + '>' + esc(b.name) + '</option>'; });
+      visibleBooks().filter(b => b.kind !== 'oral').forEach(b => { html += '<option value="' + esc(b.id) + '"' + (b.id === presetBook ? ' selected' : '') + '>' + esc(b.name) + '</option>'; });
       html += '</select></div>';
       html += '<div class="form-group"><label>单元 / 章节（选一个就只测这一章）</label><select class="input" id="testUnit"><option value="">全部单元</option></select></div>';
       html += '<div class="form-group"><label>错题去向</label>';

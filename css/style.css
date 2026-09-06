@@ -541,3 +541,5 @@ button { -webkit-tap-highlight-color: transparent; }
 .typing-result { width: 100%; font-size: 0.9rem; }
 .typing-ok { color: #15803d; font-weight: 600; }
 .typing-bad { color: #b91c1c; font-weight: 600; }
+
+.badge-oral { background: #cffafe; color: #0e7490; }

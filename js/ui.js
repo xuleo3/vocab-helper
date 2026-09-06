@@ -70,6 +70,7 @@ const UI = (function () {
     if (examType === 'ielts') return '<span class="badge badge-ielts">雅思</span>';
     if (examType === 'gaokao') return '<span class="badge badge-gaokao">高考</span>';
     if (examType === 'cet4') return '<span class="badge badge-cet4">四级</span>';
+    if (examType === 'oral') return '<span class="badge badge-oral">口语</span>';
     return '<span class="badge badge-other">通用</span>';
   }
 

@@ -25,6 +25,7 @@ const Store = (function () {
       builtinVersion: 0,
       wangluVersion: 0,
       shipVersion: 0,
+      oralVersion: 0,
       settingsVersion: 1,
       sync: { cloud: null, lastSavedAt: 0, localChangedAt: 0, dirty: false },
       stats: { testsTaken: 0, answered: 0, correct: 0, startDate: Date.now() },
@@ -70,21 +71,26 @@ const Store = (function () {
 
   function uid() { return 'id_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
-  // 船用英语（航运/货代）词库：独立数据文件 js/ship_data.js。
-  // 只补建/重建“船用英语”这一本，绝不触碰六级/雅思/高考/四级/王陆及其进度。
-  function ensureShip() {
-    if (!window.SHIP_BOOK) return;
-    const shipDef = window.SHIP_BOOK;
-    const shipVer = window.SHIP_VERSION || 1;
-    if (!state.books.some(b => b.id === shipDef.id) || (state.shipVersion || 0) !== shipVer) {
-      state.books = state.books.filter(b => b.id !== shipDef.id);
+  // 附加内置词库（船用英语 / 日常口语）：各自独立数据文件，只补建/重建自己这一本，
+  // 绝不触碰六级/雅思/高考/四级/王陆及其进度。
+  function ensureExtra(def, verKey, verField) {
+    if (!def) return;
+    const ver = window[verKey] || 1;
+    if (!state.books.some(b => b.id === def.id) || (state[verField] || 0) !== ver) {
+      state.books = state.books.filter(b => b.id !== def.id);
       const wordIds = [];
-      const units = shipDef.units.map(u => ({ id: u.id, name: u.name, wordIds: u.wordIds.slice() }));
+      const units = def.units.map(u => ({ id: u.id, name: u.name, wordIds: u.wordIds.slice() }));
       units.forEach(u => u.wordIds.forEach(wid => { wordIds.push(wid); }));
-      state.books.push({ id: shipDef.id, name: shipDef.name, examType: shipDef.examType, source: 'builtin', units, wordIds, createdAt: Date.now() });
-      state.shipVersion = shipVer;
+      const nb = { id: def.id, name: def.name, examType: def.examType, source: 'builtin', kind: def.kind || '', units, wordIds, createdAt: Date.now() };
+      if (!nb.kind) delete nb.kind;
+      state.books.push(nb);
+      state[verField] = ver;
       saveQuiet();
     }
+  }
+  function ensureExtras() {
+    ensureExtra(window.SHIP_BOOK, 'SHIP_VERSION', 'shipVersion');
+    ensureExtra(window.ORAL_BOOK, 'ORAL_VERSION', 'oralVersion');
   }
 
   // ---------- 内置词库初始化（幂等） ----------
@@ -95,8 +101,7 @@ const Store = (function () {
     const hasWan = state.books.some(b => b.id === 'wanglu');
     const wanChanged = (state.wangluVersion || 0) !== wver;
 
-    // 每次加载先补建船用英语（幂等；重建内置词库后再补一次，保证全新用户首开也生效）
-    ensureShip();
+    ensureExtras();
 
     if (state.builtinVersion === ver && hasBuiltin && (!wver || (hasWan && !wanChanged))) return;
     // 数据版本变化：只重建内置词库的【词表/单元结构】，【学习进度一律保留】。
@@ -121,7 +126,7 @@ const Store = (function () {
       units.forEach(u => u.wordIds.forEach(wid => { wordIds.push(wid); }));
       state.books.push({ id: def.id, name: def.name, examType: def.examType, source: 'builtin', kind: def.kind || 'listening', units, wordIds, createdAt: Date.now() });
     }
-    ensureShip();
+    ensureExtras();
     state.wangluVersion = wver;
     state.builtinVersion = ver;
     save();
@@ -133,6 +138,7 @@ const Store = (function () {
     if (window.BUILTIN && BUILTIN.words && BUILTIN.words[id]) return BUILTIN.words[id];
     if (window.WANGLU_WORDS && WANGLU_WORDS[id]) return WANGLU_WORDS[id];
     if (window.SHIP_WORDS && SHIP_WORDS[id]) return SHIP_WORDS[id];
+    if (window.ORAL_WORDS && ORAL_WORDS[id]) return ORAL_WORDS[id];
     return null;
   }
   function getBook(id) { return state.books.find(b => b.id === id) || null; }
