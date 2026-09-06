@@ -2,23 +2,23 @@
 // Service Worker：网络优先 + 缓存兜底（离线可用）
 // 版本号跟随资源版本，改动文件后记得同步递增
 // ============================================================
-const CACHE = 'vocab-helper-v45';
+const CACHE = 'vocab-helper-v46';
 const ASSETS = [
   './',
   './index.html',
   './manifest.webmanifest',
-  './css/style.css?v=45',
-  './js/data.js?v=45',
-  './js/wanglu_data.js?v=45',
-  './js/store.js?v=45',
-  './js/cloud.js?v=45',
-  './js/speech.js?v=45',
-  './js/importer.js?v=45',
-  './js/ui.js?v=45',
-  './js/scene_data.js?v=45',
-  './js/scene.js?v=45',
-  './js/views.js?v=45',
-  './js/app.js?v=45',
+  './css/style.css?v=46',
+  './js/data.js?v=46',
+  './js/wanglu_data.js?v=46',
+  './js/store.js?v=46',
+  './js/cloud.js?v=46',
+  './js/speech.js?v=46',
+  './js/importer.js?v=46',
+  './js/ui.js?v=46',
+  './js/scene_data.js?v=46',
+  './js/scene.js?v=46',
+  './js/views.js?v=46',
+  './js/app.js?v=46',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-180.png'

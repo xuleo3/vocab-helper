@@ -2,6 +2,8 @@
 const Views = (function () {
   const S = () => Store.getState();
   const esc = UI.esc;
+  // “看中文写英文”反向测试当前开放词库（以后可在此追加）
+  const REVERSE_BOOKS = ['cet6', 'ship'];
   const browseState = { key: '', query: '', page: 0 };
   const BROWSE_PAGE_SIZE = 180;
 
@@ -256,6 +258,9 @@ const Views = (function () {
   function wordContent(w) {
     let h = '';
     const senses = w.senses || [];
+    if (w.aliases && w.aliases.length) {
+      h += '<div class="detail-block"><div class="detail-label">📝 全称 / 别名</div><div class="chips">' + w.aliases.map(function (a) { return '<span class="chip chip-sm">' + esc(a) + '</span>'; }).join('') + '</div></div>';
+    }
     if (senses.length) {
       h += '<div class="sense-list">';
       senses.forEach((s, i) => {
@@ -317,6 +322,11 @@ const Views = (function () {
       html += '<label class="radio"><input type="radio" name="roundKind" value="r1" checked> 第1次测试 → 第1次错题本</label>';
       html += '<label class="radio"><input type="radio" name="roundKind" value="r2"> 第2次完整测试 → 第2次错题本</label>';
       html += '</div><p class="muted small">第2次完整测试：等你把全部单词重新背完一遍后再测，错词单独进第2次错题本。</p></div>';
+      html += '<div class="form-group" id="dirModeWrap" style="display:none"><label>测试方向（中文写英文）</label>';
+      html += '<div class="radio-row">';
+      html += '<label class="radio"><input type="radio" name="dirMode" value="en2zh" checked> 👀 看词写意（看英文写中文）</label>';
+      html += '<label class="radio"><input type="radio" name="dirMode" value="zh2en"> ✍️ 中文写英文（看中文，写英文）</label>';
+      html += '</div><p class="muted small" id="dirModeHint">中文写英文：显示中文意思，你输入对应的英文单词/短语；缩写可用全称或缩写，全称/别名也会在答案里给出。</p></div>';
       const presetBookObj = Store.getBook(presetBook);
       const isListenBook = !!(presetBookObj && presetBookObj.kind === 'listening');
       html += '<div class="form-group" id="listenModeWrap"' + (isListenBook ? '' : ' style="display:none"') + '><label>出题方式（王陆语料库）</label>';
@@ -357,7 +367,7 @@ const Views = (function () {
     const qn = quiz.idx + 1;
     const total = quiz.words.length;
     let html = '<div class="quiz-wrap">';
-    html += '<div class="quiz-progress"><div class="progress"><div class="progress-bar" style="width:' + Math.round(qn / total * 100) + '%"></div></div><div class="muted small">' + (quiz.listen ? '🔊 听音写意 · ' : '') + '第 ' + qn + ' / ' + total + ' 题 · 已对 ' + quiz.correct + ' · 已错 ' + quiz.wrong + '</div></div>';
+    html += '<div class="quiz-progress"><div class="progress"><div class="progress-bar" style="width:' + Math.round(qn / total * 100) + '%"></div></div><div class="muted small">' + (quiz.listen ? '🔊 听音写意 · ' : (quiz.reverse ? '✍️ 中文写英文 · ' : '')) + '第 ' + qn + ' / ' + total + ' 题 · 已对 ' + quiz.correct + ' · 已错 ' + quiz.wrong + '</div></div>';
     html += '<div class="quiz-card card' + (quiz.revealed ? (quiz.lastCorrect ? ' quiz-correct' : ' quiz-wrong') : '') + '">';
     if (quiz.listen && !quiz.revealed) {
       html += '<div class="quiz-listen-hero">';
@@ -365,6 +375,22 @@ const Views = (function () {
       html += '<button class="listen-play-btn" data-action="speak-current" title="重听发音">🔊 播放发音</button>';
       html += '<div class="muted small">每个新词会自动朗读，可点上方按钮重听</div>';
       html += '</div>';
+    } else if (quiz.reverse) {
+      if (!quiz.revealed) {
+        const _pm = (w.senses && w.senses[0] && w.senses[0].meaning) || '';
+        html += '<div class="quiz-word-row">';
+        html += '<div class="quiz-label">根据中文意思写出英文（缩写/全称均可）</div>';
+        html += '<div class="quiz-word">' + esc(_pm) + '</div>';
+        html += '</div>';
+      } else {
+        html += '<div class="quiz-word-row">';
+        html += '<div class="quiz-label">正确答案</div>';
+        html += '<div class="quiz-word">' + esc(w.headword) + '</div>';
+        if (quiz.showPhonetic && w.phonetic) html += '<div class="phonetic">' + esc(w.phonetic) + '</div>';
+        html += UI.posBadge(w.pos) + UI.speakBtn(w);
+        html += '</div>';
+        if (w.aliases && w.aliases.length) html += '<div class="quiz-note">📝 全称 / 别名：' + esc(w.aliases.join('；')) + '</div>';
+      }
     } else {
       html += '<div class="quiz-word-row">';
       html += '<div class="quiz-word">' + esc(w.headword) + '</div>';
@@ -374,12 +400,13 @@ const Views = (function () {
     }
 
     if (!quiz.revealed) {
-      html += '<textarea id="quizInput" class="input quiz-input" rows="3" placeholder="' + (quiz.listen ? '听发音，写出中文意思（写一个即可，同义词也算对）' : '打出它的意思（可多个，用分号隔开；同义词也算对）') + '"></textarea>';
+      html += '<textarea id="quizInput" class="input quiz-input" rows="3" placeholder="' + (quiz.listen ? '听发音，写出中文意思（写一个即可，同义词也算对）' : (quiz.reverse ? '根据中文意思写出对应的英文（缩写/全称均可）' : '打出它的意思（可多个，用分号隔开；同义词也算对）')) + '"></textarea>';
       html += '<div class="btn-row">';
       if (quiz.idx > 0) html += '<button class="btn" data-action="prev-question">← 上一题</button>';
       html += '<button class="btn btn-primary btn-lg" data-action="submit-answer">提交答案</button></div>';
       html += '<p class="muted small">快捷键：Enter 提交，再按 Enter 下一题</p>';
     } else {
+      if (!quiz.reverse) {
       const ev = quiz.lastEv;
       const verdict = quiz.lastCorrect ? '答对 ✓' : '答错 ✗';
       html += '<div class="quiz-verdict ' + (quiz.lastCorrect ? 'ok' : 'no') + '">' + (ev.accepted ? '已纠正为正确 ✓' : verdict + (ev.matchedCount < ev.total ? '（答出 ' + ev.matchedCount + ' / ' + ev.total + ' 个意思）' : '')) + '</div>';
@@ -406,6 +433,17 @@ const Views = (function () {
         html += '<button class="btn btn-soft" data-action="accept-answer">✓ 接受我的答案</button></div>';
       }
       if (ev.accepted) html += '<div class="quiz-note accepted-note">已保存为该单词的可接受说法，以后会自动判对。</div>';
+      } else {
+        // —— 反向测试（看中文写英文）——
+        const revOk = quiz.lastCorrect;
+        html += '<div class="quiz-verdict ' + (revOk ? 'ok' : 'no') + '">' + (revOk ? '答对 ✓' : '答错 ✗') + '</div>';
+        if (quiz.lastInput) html += '<div class="quiz-your-answer">你的回答：' + esc(quiz.lastInput) + '</div>';
+        if (!revOk && quiz.lastInput && quiz.lastInput.trim()) {
+          html += '<div class="answer-correction"><div><b>这个写法其实也算这个英文？</b><span class="muted small"> 点一下会记住这个写法（缩写/全称/别名均可），撤销本次错题并以后自动判对。</span></div>';
+          html += '<button class="btn btn-soft" data-action="accept-answer">✓ 接受我的答案</button></div>';
+        }
+        if (quiz.lastEv && quiz.lastEv.accepted) html += '<div class="quiz-note accepted-note">已记住这个写法，以后自动判对。</div>';
+      }
       // 答案出现时：加入重要单词本
       {
         const inImp = !!(s.important.words && s.important.words[w.id]);

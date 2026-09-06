@@ -14,6 +14,7 @@ const Store = (function () {
       important: { words: {} },  // 重要单词本：wid -> {addedAt}
       testSessions: {},  // 进行中的测试会话：key -> {scope, answered, startedAt, updatedAt}
       answerAliases: {}, // wid -> [用户确认可接受的中文说法]
+      answerEn: {},      // wid -> [用户确认可接受的英文写法/全称]
       mastered: {},     // wid -> ts
       wordStats: {},    // wid -> {wrongCount,firstAt,lastAt}
       settings: {
@@ -22,6 +23,7 @@ const Store = (function () {
       },
       builtinVersion: 0,
       wangluVersion: 0,
+      shipVersion: 0,
       settingsVersion: 1,
       sync: { cloud: null, lastSavedAt: 0, localChangedAt: 0, dirty: false },
       stats: { testsTaken: 0, answered: 0, correct: 0, startDate: Date.now() },
@@ -43,6 +45,7 @@ const Store = (function () {
     state.important = state.important || { words: {} };
     state.testSessions = state.testSessions || {};
     state.answerAliases = state.answerAliases || {};
+    state.answerEn = state.answerEn || {};
     state.activity = state.activity || [];
     state.errorBooks = state.errorBooks || [];
     state.mastered = state.mastered || {};
@@ -73,6 +76,23 @@ const Store = (function () {
     const hasBuiltin = state.books.some(b => b.source === 'builtin');
     const hasWan = state.books.some(b => b.id === 'wanglu');
     const wanChanged = (state.wangluVersion || 0) !== wver;
+
+    // 船用英语（航运/货代）词库：独立数据文件 js/ship_data.js。
+    // 只重建/补建“船用英语”这一本，绝不触碰六级/雅思/高考/四级/王陆及其进度。
+    if (window.SHIP_BOOK) {
+      const shipDef = window.SHIP_BOOK;
+      const shipVer = window.SHIP_VERSION || 1;
+      if (!state.books.some(b => b.id === shipDef.id) || (state.shipVersion || 0) !== shipVer) {
+        state.books = state.books.filter(b => b.id !== shipDef.id);
+        const wordIds = [];
+        const units = shipDef.units.map(u => ({ id: u.id, name: u.name, wordIds: u.wordIds.slice() }));
+        units.forEach(u => u.wordIds.forEach(wid => { wordIds.push(wid); }));
+        state.books.push({ id: shipDef.id, name: shipDef.name, examType: shipDef.examType, source: 'builtin', units, wordIds, createdAt: Date.now() });
+        state.shipVersion = shipVer;
+        saveQuiet();
+      }
+    }
+
     if (state.builtinVersion === ver && hasBuiltin && (!wver || (hasWan && !wanChanged))) return;
     // 数据版本变化：只重建内置词库的【词表/单元结构】，【学习进度一律保留】。
     // 单词 id 是稳定的，已掌握/错题本/重要单词本/错词统计都按单词 id 记录，
@@ -106,6 +126,7 @@ const Store = (function () {
     if (state.words[id]) return state.words[id];
     if (window.BUILTIN && BUILTIN.words && BUILTIN.words[id]) return BUILTIN.words[id];
     if (window.WANGLU_WORDS && WANGLU_WORDS[id]) return WANGLU_WORDS[id];
+    if (window.SHIP_WORDS && SHIP_WORDS[id]) return SHIP_WORDS[id];
     return null;
   }
   function getBook(id) { return state.books.find(b => b.id === id) || null; }
@@ -453,6 +474,45 @@ const Store = (function () {
     return state.settings.polysemy === 'strict' ? ev.all : ev.any;
   }
 
+  // ---------- 中文写英文（反向测试）判分 ----------
+  function normEn(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+  function enAcceptList(word) {
+    const out = [];
+    function push(x) { const v = String(x || '').trim(); if (v && !out.some(function (y) { return normEn(y) === normEn(v); })) out.push(v); }
+    if (word) { push(word.headword); (word.aliases || []).forEach(push); }
+    (state.answerEn[word && word.id] || []).forEach(push);
+    return out;
+  }
+  function evaluateEn(word, input) {
+    const list = enAcceptList(word);
+    const n = normEn(input);
+    const correct = !!n && list.some(function (x) { return normEn(x) === n; });
+    return { correct: correct, expected: list, inputNorm: n };
+  }
+  function isCorrectEn(word, ev) { return !!(ev && ev.correct); }
+  function acceptEnAlias(wid, input, opts) {
+    const alias = String(input || '').trim();
+    if (!wid || !normEn(alias)) return false;
+    const list = state.answerEn[wid] || (state.answerEn[wid] = []);
+    if (!list.some(function (x) { return normEn(x) === normEn(alias); })) list.push(alias);
+    opts = opts || {};
+    if (opts.errorBookId) {
+      const eb = getErrorBook(opts.errorBookId);
+      const entry = eb && eb.words[wid];
+      if (entry) { entry.wrongCount = Math.max(0, (entry.wrongCount || 0) - 1); if (!entry.wrongCount) delete eb.words[wid]; }
+    }
+    const ws = state.wordStats[wid];
+    if (ws) { ws.wrongCount = Math.max(0, (ws.wrongCount || 0) - 1); if (!ws.wrongCount) delete state.wordStats[wid]; }
+    const fr = state.frequent.words[wid];
+    const nowWrong = state.wordStats[wid] ? state.wordStats[wid].wrongCount : 0;
+    if (fr && !fr.manual && nowWrong < state.settings.freqThreshold) delete state.frequent.words[wid];
+    if (state.settings.autoMaster) state.mastered[wid] = Date.now();
+    if (opts.masterInBookId) { const parent = getErrorBook(opts.masterInBookId); if (parent && parent.words[wid]) parent.words[wid].mastered = true; }
+    save();
+    return true;
+  }
+  function getEnAliases(wid) { const w = getWord(wid); return enAcceptList(w); }
+
   function acceptAnswerAlias(wid, input, opts) {
     const alias = (input || '').trim();
     if (!wid || !normalize(alias)) return false;
@@ -520,6 +580,7 @@ const Store = (function () {
     state.books = state.books.filter(x => x.id !== bookId);
     state.errorBooks = state.errorBooks.filter(x => x.bookId !== bookId);
     Object.keys(state.frequent.words).forEach(wid => { if (ids.includes(wid)) delete state.frequent.words[wid]; });
+    ids.forEach(id => { delete state.answerAliases[id]; delete state.answerEn[id]; });
     save();
   }
 
@@ -580,6 +641,7 @@ const Store = (function () {
       wordStats: state.wordStats,
       testSessions: state.testSessions,
       answerAliases: state.answerAliases,
+      answerEn: state.answerEn,
       stats: state.stats,
       settings: state.settings,
       activity: state.activity
@@ -589,7 +651,7 @@ const Store = (function () {
   function importSyncData(json) {
     const parsed = JSON.parse(json);
     if (!parsed || parsed.syncVersion !== 2) throw new Error('不是有效的云同步数据');
-    ['mastered', 'errorBooks', 'important', 'frequent', 'wordStats', 'testSessions', 'answerAliases', 'stats', 'settings', 'activity'].forEach(function (k) {
+    ['mastered', 'errorBooks', 'important', 'frequent', 'wordStats', 'testSessions', 'answerAliases', 'answerEn', 'stats', 'settings', 'activity'].forEach(function (k) {
       if (parsed[k] !== undefined) state[k] = parsed[k];
     });
     saveQuiet();
@@ -615,7 +677,9 @@ const Store = (function () {
     unitNameOf, getUnitIdByName,
     recordWrongWord, markCorrectWord, bumpWordStats, finishTestStats,
     sessionKey, saveTestSession, getTestSession, clearTestSession,
-    evaluateAnswer, isCorrect, normalize, acceptAnswerAlias,
+    evaluateAnswer, isCorrect, normalize,
+    evaluateEn, isCorrectEn, acceptEnAlias, getEnAliases,
+    acceptAnswerAlias,
     addImportedBook, deleteBook, updateWord, setSettings, setTheme,
     exportData, importData, resetAll, progress, overallStats,
     saveQuiet, getCloud, setCloud,

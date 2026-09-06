@@ -5,6 +5,7 @@
 const App = (function () {
   let current = { view: 'dashboard', params: {} };
   let lastQuizSpoken = -2;
+  const REVERSE_BOOKS = ['cet6', 'ship'];
   let studySearchTimer = null;
 
   function go(view, params) {
@@ -45,10 +46,12 @@ const App = (function () {
       }
       updateTestModeSection();
       updateListenModeSection(bookSel.value);
+      updateDirModeSection(bookSel.value);
       bookSel.addEventListener('change', function () {
         fillUnitSelect(bookSel.value);
         updateTestModeSection();
         updateListenModeSection(bookSel.value);
+      updateDirModeSection(bookSel.value);
       });
     }
     const unitSel = document.getElementById('testUnit');
@@ -88,7 +91,7 @@ const App = (function () {
       if (lastQuizSpoken !== qA.idx) {
         lastQuizSpoken = qA.idx;
         const wA = qA.words[qA.idx];
-        if (wA && (qA.listen || Store.getState().settings.autoSpeak)) {
+        if (wA && !qA.reverse && (qA.listen || Store.getState().settings.autoSpeak)) {
           setTimeout(function () { Speech.speakWord(wA); }, 120);
         }
       }
@@ -100,6 +103,15 @@ const App = (function () {
   function quizRevealed() {
     const q = Views.quizState();
     return q ? q.revealed : false;
+  }
+
+  // 中文写英文：仅支持的普通词库显示方向选择（当前六级/船用英语）
+  function updateDirModeSection(bookId) {
+    const wrap = document.getElementById('dirModeWrap');
+    if (!wrap) return;
+    const b = Store.getBook(bookId);
+    const ok = !!(b && b.kind !== 'listening' && REVERSE_BOOKS.indexOf(b.id) >= 0);
+    wrap.style.display = ok ? '' : 'none';
   }
 
   // 测试设置页：根据当前选择动态显示"继续/重开"
@@ -249,6 +261,7 @@ const App = (function () {
       revealed: false, lastCorrect: false, lastEv: null, lastInput: '',
       scope: scope, resultBookName: '', showPhonetic: scope.showPhonetic !== false,
       listen: !!scope.listen,
+      reverse: !!scope.reverse,
       startTime: Date.now()
     };
     delete scope.resumeProgress;
@@ -270,10 +283,13 @@ const App = (function () {
       const unitName = unitId ? (book.units.find(u => u.id === unitId) || {}).name : '全部单元';
       const listenEl = document.querySelector('input[name="listenMode"]:checked');
       const listenMode = book.kind === 'listening' ? (listenEl ? listenEl.value : 'listen') : 'see';
+      const dirModeEl = document.querySelector('input[name="dirMode"]:checked');
+      const dirModeVal = dirModeEl ? dirModeEl.value : 'en2zh';
       const scopeBook = {
         preset: 'book', bookId, unitId, kind, parentId: null, shuffle: opt('optShuffle'),
         count: opt('optCount'), showPhonetic: opt('optShowPhonetic'),
         listen: listenMode === 'listen',
+        reverse: dirModeVal === 'zh2en',
         scopeLabel: book.name + ' · ' + unitName
       };
       const keyBook = Store.sessionKey(scopeBook);
@@ -287,6 +303,7 @@ const App = (function () {
         scopeBook.masterIn = savedBook.scope.masterIn;
         scopeBook.ebName = savedBook.scope.ebName;
         scopeBook.listen = !!(book.kind === 'listening' && savedBook.scope.listen);
+        scopeBook.reverse = !!(savedBook.scope && savedBook.scope.reverse);
         scopeBook.sessionKey = keyBook;
         scopeBook.wordIds = (savedBook.scope.wordIds || []).slice();
         scopeBook.resumeProgress = savedBook.progress || { results: [], correct: 0, wrong: 0 };
@@ -358,8 +375,10 @@ const App = (function () {
     if (!q || q.revealed) return;
     const w = q.words[q.idx];
     const input = document.getElementById('quizInput').value;
-    const ev = Store.evaluateAnswer(w, input);
-    const correct = Store.isCorrect(w, ev);
+    const isRev = !!q.reverse;
+    const ev = isRev ? Store.evaluateEn(w, input) : Store.evaluateAnswer(w, input);
+    const correct = isRev ? Store.isCorrectEn(w, ev) : Store.isCorrect(w, ev);
+    const missedSenses = isRev ? [] : (ev.missed || []);
     const rec = { wid: w.id, correct: correct, ev: ev, input: input };
     if (q.results[q.idx]) q.results[q.idx] = rec; else q.results.push(rec);
     q.revealed = true; q.lastEv = ev; q.lastInput = input; q.lastCorrect = correct;
@@ -371,10 +390,10 @@ const App = (function () {
     } else {
       if (sc.preset === 'frequent') Store.bumpWordStats(w.id);
       else if (sc.preset === 'important') {
-        const recorded = Store.recordWrongWord({ bookId: w.bookId, kind: 'r1', parentId: null, wid: w.id, missedSenses: ev.missed });
+        const recorded = Store.recordWrongWord({ bookId: w.bookId, kind: 'r1', parentId: null, wid: w.id, missedSenses: missedSenses });
         rec.errorBookId = recorded ? recorded.id : null;
       } else {
-        const recorded = Store.recordWrongWord({ bookId: sc.bookId, kind: sc.kind, parentId: sc.parentId || null, targetEbId: sc.targetEbId, wid: w.id, missedSenses: ev.missed });
+        const recorded = Store.recordWrongWord({ bookId: sc.bookId, kind: sc.kind, parentId: sc.parentId || null, targetEbId: sc.targetEbId, wid: w.id, missedSenses: missedSenses });
         rec.errorBookId = recorded ? recorded.id : null;
       }
     }
@@ -392,13 +411,23 @@ const App = (function () {
     const rec = q.results[q.idx];
     const w = q.words[q.idx];
     if (!rec || !w || !rec.input.trim()) { UI.toast('空答案不能设为同义说法', 'error'); return; }
-    Store.acceptAnswerAlias(w.id, rec.input, {
-      errorBookId: rec.errorBookId || q.scope.targetEbId || null,
-      masterInBookId: q.scope.masterIn || null
-    });
-    rec.correct = true;
-    rec.ev = Store.evaluateAnswer(w, rec.input);
-    rec.ev.accepted = true;
+    if (q.reverse) {
+      Store.acceptEnAlias(w.id, rec.input, {
+        errorBookId: rec.errorBookId || q.scope.targetEbId || null,
+        masterInBookId: q.scope.masterIn || null
+      });
+      rec.correct = true;
+      rec.ev = Store.evaluateEn(w, rec.input);
+      rec.ev.accepted = true;
+    } else {
+      Store.acceptAnswerAlias(w.id, rec.input, {
+        errorBookId: rec.errorBookId || q.scope.targetEbId || null,
+        masterInBookId: q.scope.masterIn || null
+      });
+      rec.correct = true;
+      rec.ev = Store.evaluateAnswer(w, rec.input);
+      rec.ev.accepted = true;
+    }
     q.correct++;
     q.wrong = Math.max(0, q.wrong - 1);
     q.lastCorrect = true;
