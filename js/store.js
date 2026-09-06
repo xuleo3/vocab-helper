@@ -69,6 +69,23 @@ const Store = (function () {
 
   function uid() { return 'id_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
+  // 船用英语（航运/货代）词库：独立数据文件 js/ship_data.js。
+  // 只补建/重建“船用英语”这一本，绝不触碰六级/雅思/高考/四级/王陆及其进度。
+  function ensureShip() {
+    if (!window.SHIP_BOOK) return;
+    const shipDef = window.SHIP_BOOK;
+    const shipVer = window.SHIP_VERSION || 1;
+    if (!state.books.some(b => b.id === shipDef.id) || (state.shipVersion || 0) !== shipVer) {
+      state.books = state.books.filter(b => b.id !== shipDef.id);
+      const wordIds = [];
+      const units = shipDef.units.map(u => ({ id: u.id, name: u.name, wordIds: u.wordIds.slice() }));
+      units.forEach(u => u.wordIds.forEach(wid => { wordIds.push(wid); }));
+      state.books.push({ id: shipDef.id, name: shipDef.name, examType: shipDef.examType, source: 'builtin', units, wordIds, createdAt: Date.now() });
+      state.shipVersion = shipVer;
+      saveQuiet();
+    }
+  }
+
   // ---------- 内置词库初始化（幂等） ----------
   function initBuiltin() {
     const ver = (window.BUILTIN_VERSION || 0);
@@ -77,21 +94,8 @@ const Store = (function () {
     const hasWan = state.books.some(b => b.id === 'wanglu');
     const wanChanged = (state.wangluVersion || 0) !== wver;
 
-    // 船用英语（航运/货代）词库：独立数据文件 js/ship_data.js。
-    // 只重建/补建“船用英语”这一本，绝不触碰六级/雅思/高考/四级/王陆及其进度。
-    if (window.SHIP_BOOK) {
-      const shipDef = window.SHIP_BOOK;
-      const shipVer = window.SHIP_VERSION || 1;
-      if (!state.books.some(b => b.id === shipDef.id) || (state.shipVersion || 0) !== shipVer) {
-        state.books = state.books.filter(b => b.id !== shipDef.id);
-        const wordIds = [];
-        const units = shipDef.units.map(u => ({ id: u.id, name: u.name, wordIds: u.wordIds.slice() }));
-        units.forEach(u => u.wordIds.forEach(wid => { wordIds.push(wid); }));
-        state.books.push({ id: shipDef.id, name: shipDef.name, examType: shipDef.examType, source: 'builtin', units, wordIds, createdAt: Date.now() });
-        state.shipVersion = shipVer;
-        saveQuiet();
-      }
-    }
+    // 每次加载先补建船用英语（幂等；重建内置词库后再补一次，保证全新用户首开也生效）
+    ensureShip();
 
     if (state.builtinVersion === ver && hasBuiltin && (!wver || (hasWan && !wanChanged))) return;
     // 数据版本变化：只重建内置词库的【词表/单元结构】，【学习进度一律保留】。
@@ -116,6 +120,7 @@ const Store = (function () {
       units.forEach(u => u.wordIds.forEach(wid => { wordIds.push(wid); }));
       state.books.push({ id: def.id, name: def.name, examType: def.examType, source: 'builtin', kind: def.kind || 'listening', units, wordIds, createdAt: Date.now() });
     }
+    ensureShip();
     state.wangluVersion = wver;
     state.builtinVersion = ver;
     save();
