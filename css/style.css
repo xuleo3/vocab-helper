@@ -531,3 +531,13 @@ button { -webkit-tap-highlight-color: transparent; }
 .practice-card { margin-top: 10px; }
 #practiceQ { font-weight: 600; margin: 6px 0 8px; font-size: 1.1rem; line-height: 1.5; }
 .practice-fb { margin-top: 6px; }
+
+/* ---- 键盘默写（列表/卡片） ---- */
+.study-typing-toggle { margin: 10px 0 4px; font-weight: 600; }
+.typing-row { flex-wrap: wrap; gap: 6px; }
+.typing-zh { font-size: 0.95rem; }
+.typing-side { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 220px; }
+.typing-in { min-width: 150px; }
+.typing-result { width: 100%; font-size: 0.9rem; }
+.typing-ok { color: #15803d; font-weight: 600; }
+.typing-bad { color: #b91c1c; font-weight: 600; }

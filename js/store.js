@@ -19,6 +19,7 @@ const Store = (function () {
       wordStats: {},    // wid -> {wrongCount,firstAt,lastAt}
       settings: {
         defaultExam: 'cet6', ttsLang: 'auto', ttsRate: 0.95, autoSpeak: true,
+        keyTyping: true, // 键盘默写：长期可开关（列表/卡片打字助记）
         polysemy: 'lenient', freqThreshold: 2, autoMaster: true, theme: 'light'
       },
       builtinVersion: 0,

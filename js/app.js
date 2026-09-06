@@ -103,6 +103,23 @@ const App = (function () {
     document.querySelectorAll('input[name="practiceDir"]').forEach(function (r) {
       if (!r.dataset.boundP) { r.dataset.boundP = '1'; r.addEventListener('change', function () { render(); }); }
     });
+    const kt = document.getElementById('keyTypingToggle');
+    if (kt && !kt.dataset.boundK) {
+      kt.dataset.boundK = '1';
+      kt.addEventListener('change', function () { Store.setSettings({ keyTyping: kt.checked }); UI.toast(kt.checked ? '已开启键盘默写 ✍️' : '已关闭键盘默写'); render(); });
+    }
+    document.querySelectorAll('.typing-in').forEach(function (inp) {
+      if (!inp.dataset.boundT) {
+        inp.dataset.boundT = '1';
+        inp.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') {
+            e.preventDefault(); e.stopPropagation();
+            doTypingCheck(inp.dataset.wid);
+            focusNextTypingInput(inp);
+          }
+        });
+      }
+    });
 
     // 测试题自动发音（新题出现时朗读）
     const qA = Views.quizState();
@@ -619,6 +636,7 @@ const App = (function () {
     'card-unknown': function () { cardMark(false); },
     'study-practice-toggle': function () { Views.toggleStudyPractice(); render(); },
     'practice-check': function () { doPracticeCheck(); },
+    'typing-check': function (el) { doTypingCheck(el.dataset.wid); },
     'toggle-theme': function () { toggleTheme(); },
     'export-data': function () { exportData(); },
     'import-data': function () { importData(); },
@@ -819,6 +837,31 @@ const App = (function () {
     }
     fb.innerHTML = (ok ? '<div class="quiz-verdict ok">✓ 正确！</div>' : '<div class="quiz-verdict no">✗ 不对，再想想</div>') + '<div class="muted small">' + UI.esc(show) + '</div>';
     if (ok) inputEl.select();
+  }
+
+  // 词表列表：某一行默写检查
+  function doTypingCheck(wid) {
+    const inputEl = document.querySelector('.typing-in[data-wid="' + wid + '"]');
+    const resEl = document.querySelector('.typing-result[data-rid="' + wid + '"]');
+    const w = Store.getWord(wid);
+    if (!inputEl || !resEl || !w) return;
+    const val = inputEl.value;
+    if (!val.trim()) return;
+    const ev = Store.evaluateEn(w, val);
+    if (ev.correct) {
+      resEl.innerHTML = '<span class="typing-ok">✓ ' + UI.esc(w.headword) + '</span>' + (w.aliases && w.aliases.length ? '<span class="muted small">（' + UI.esc(w.aliases.join('；')) + '）</span>' : '');
+    } else {
+      const ans = (ev.expected && ev.expected.length) ? ev.expected.join(' / ') : w.headword;
+      resEl.innerHTML = '<span class="typing-bad">✗ ' + UI.esc(ans) + '</span>';
+    }
+  }
+  function focusNextTypingInput(current) {
+    const ins = Array.prototype.slice.call(document.querySelectorAll('#wordList .typing-in'));
+    const i = ins.indexOf(current);
+    if (i < 0) return;
+    for (let j = i + 1; j < ins.length; j++) {
+      if (!ins[j].value.trim()) { ins[j].focus(); return; }
+    }
   }
 
   // ================= 全局事件绑定 =================

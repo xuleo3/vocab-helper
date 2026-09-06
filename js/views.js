@@ -162,7 +162,7 @@ const Views = (function () {
       html += '<button class="chip' + (unitId === u.id ? ' chip-active' : '') + '" data-action="study-unit" data-book="' + esc(bookId) + '" data-unit="' + esc(u.id) + '">' + esc(u.name) + '</button>';
     });
     html += '</div>';
-
+    html += '<div class="study-typing-toggle"><label class="check"><input type="checkbox" id="keyTypingToggle"' + (S().settings.keyTyping ? ' checked' : '') + '> ✍️ 键盘默写（在列表/卡片里打字助记，长期保留，可随时关闭）</label></div>';
     if (unitId) {
       const un = book.units.find(u => u.id === unitId);
       html += '<div class="btn-row"><button class="btn btn-primary" data-action="test-book-unit" data-book="' + esc(bookId) + '" data-unit="' + esc(unitId) + '">📝 测试本章节' + (un ? '（' + esc(un.name) + '）' : '') + '</button></div>';
@@ -187,21 +187,35 @@ const Views = (function () {
     let html = '<div class="study-toolbar"><input type="search" id="studySearch" class="input" placeholder="搜索英文、中文或音标…" value="' + esc(browseState.query) + '"><span class="muted small">' + (kw ? '找到 ' + filtered.length + ' / ' : '') + words.length + ' 词</span></div>';
     html += '<div class="word-list" id="wordList">';
     let lastGroup = null;
+    const typing = !!S().settings.keyTyping;
     shown.forEach(w => {
       if (typeof w.group === 'number' && w.group !== lastGroup) {
         html += '<div class="group-header">词群 ' + (w.group + 1) + '</div>';
         lastGroup = w.group;
       }
-      const mastered = !!S().mastered[w.id];
-      html += '<div class="word-row" data-action="word-detail" data-wid="' + esc(w.id) + '">' +
-        '<div class="word-row-main">' +
-        '<span class="word-h">' + esc(w.headword) + '</span>' +
-        (w.phonetic ? '<span class="phonetic">' + esc(w.phonetic) + '</span>' : '') +
-        UI.posBadge(w.pos) +
-        '<span class="word-mean">' + UI.meaningPreview(w) + '</span>' +
-        '</div>' +
-        '<div class="word-row-side">' + (mastered ? '<span class="tag tag-green">已掌握</span>' : '') + UI.speakBtn(w) + '</div>' +
-        '</div>';
+      if (typing) {
+        const _zh = (w.senses && w.senses[0] && w.senses[0].meaning) || '';
+        const _al = (w.aliases && w.aliases.length) ? w.aliases.join('；') : '';
+        html += '<div class="word-row typing-row">' +
+          '<div class="word-row-main"><span class="word-mean typing-zh">' + esc(_zh) + '</span></div>' +
+          '<div class="word-row-side typing-side">' +
+          '<input class="input typing-in" data-wid="' + esc(w.id) + '" placeholder="打英文" autocomplete="off" spellcheck="false">' +
+          '<button class="btn btn-sm btn-primary" data-action="typing-check" data-wid="' + esc(w.id) + '">检查</button>' +
+          '</div>' +
+          '<div class="typing-result" data-rid="' + esc(w.id) + '"></div>' +
+          '</div>';
+      } else {
+        const mastered = !!S().mastered[w.id];
+        html += '<div class="word-row" data-action="word-detail" data-wid="' + esc(w.id) + '">' +
+          '<div class="word-row-main">' +
+          '<span class="word-h">' + esc(w.headword) + '</span>' +
+          (w.phonetic ? '<span class="phonetic">' + esc(w.phonetic) + '</span>' : '') +
+          UI.posBadge(w.pos) +
+          '<span class="word-mean">' + UI.meaningPreview(w) + '</span>' +
+          '</div>' +
+          '<div class="word-row-side">' + (mastered ? '<span class="tag tag-green">已掌握</span>' : '') + UI.speakBtn(w) + '</div>' +
+          '</div>';
+      }
     });
     html += '</div>';
     if (!shown.length) html += '<div class="card empty-state">没有找到匹配的单词，换个关键词试试。</div>';
@@ -244,10 +258,7 @@ const Views = (function () {
     html += '<button class="btn btn-success' + (mastered ? ' on' : '') + '" data-action="card-know">认识 ✓</button>';
     html += '<button class="btn btn-danger' + (inFreq ? ' on' : '') + '" data-action="card-unknown">不认识 ✗</button>';
     html += '</div>';
-    html += '<div class="btn-row center">';
-    html += '<button class="btn' + (studyPractice ? ' btn-primary' : '') + '" data-action="study-practice-toggle">✍️ 默写练习（键盘助记）</button>';
-    html += '</div>';
-    if (studyPractice) html += practicePanel(w);
+    if (S().settings.keyTyping) html += practicePanel(w);
     html += '<p class="muted small center">翻面自动发音；点「认识」标记掌握并下一张；点「不认识」加入经常错词本。默写练习只用来帮自己记忆，不记入错题本。</p>';
     html += '</div>';
     return html;
@@ -816,7 +827,7 @@ const Views = (function () {
 
   return { dashboard, books, study, test, errors, settings, wordModal, editWordModal, importModal, errorBookWordsModal, frequentModal, importantModal, wordContent, setBrowseQuery, setBrowsePage, quizState: function(){ return quiz; }, setQuiz: function(q){ quiz = q; },
   cardState: function(){ return cardState; }, setCardState: function(s){ cardState = Object.assign(cardState, s); },
-  toggleStudyPractice: function(){ studyPractice = !studyPractice; return studyPractice; },
-  getStudyPractice: function(){ return studyPractice; },
+  toggleStudyPractice: function(){ const n = !S().settings.keyTyping; Store.setSettings({ keyTyping: n }); return n; },
+  getStudyPractice: function(){ return !!S().settings.keyTyping; },
   getStudyWord: function(){ return lastStudyWid ? Store.getWord(lastStudyWid) : null; } };
 })();
