@@ -17,15 +17,25 @@ const CloudSync = (function () {
   function autoSet(v) { localStorage.setItem(LS_AUTO, v ? '1' : '0'); }
 
   async function apiGet(pass) {
-    const res = await fetch(API + '?pass=' + encodeURIComponent(pass), { method: 'GET' });
+    let res;
+    try {
+      res = await fetch(API + '?pass=' + encodeURIComponent(pass), { method: 'GET' });
+    } catch (e) {
+      throw new Error('无法连接云同步服务器（网络不通 / Failed to fetch）——手机在国内网络请开启梯子/VPN 后再同步；紧急可先到「设置」用「导出备份」把进度存成文件');
+    }
     return parseRes(res);
   }
   async function apiPost(pass, data, savedAt) {
-    const res = await fetch(API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: pass, data: data, savedAt: savedAt })
-    });
+    let res;
+    try {
+      res = await fetch(API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pass, data: data, savedAt: savedAt })
+      });
+    } catch (e) {
+      throw new Error('无法连接云同步服务器（网络不通 / Failed to fetch）——手机在国内网络请开启梯子/VPN 后再同步；紧急可先到「设置」用「导出备份」把进度存成文件');
+    }
     return parseRes(res);
   }
   async function parseRes(res) {
