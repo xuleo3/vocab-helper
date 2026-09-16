@@ -4,6 +4,25 @@ const Views = (function () {
   const esc = UI.esc;
   // “看中文写英文”反向测试当前开放词库（以后可在此追加）
   const REVERSE_BOOKS = ['cet6', 'ship'];
+  // 日常口语：16 周出国口语计划（周 → 场景单元）
+  const ORAL_PLAN = [
+    { week: 1, unit: 'oral_u1', title: '问候与打招呼', focus: '见面、寒暄、道别' },
+    { week: 2, unit: 'oral_u3', title: '感谢与道歉', focus: '道谢、致歉、回应' },
+    { week: 3, unit: 'oral_u4', title: '请求与帮助', focus: '请人帮忙、确认信息' },
+    { week: 4, unit: 'oral_u5', title: '时间与天气', focus: '时间、日期、天气' },
+    { week: 5, unit: 'oral_u6', title: '问路与出行', focus: '问路、坐车、买票' },
+    { week: 6, unit: 'oral_u7', title: '购物与价格', focus: '价格、退换、付款' },
+    { week: 7, unit: 'oral_u8', title: '餐厅与饮食', focus: '点餐、结账、打包' },
+    { week: 8, unit: 'oral_u9', title: '电话与约会', focus: '打电话、约时间' },
+    { week: 9, unit: 'oral_u10', title: '情绪与工作学习', focus: '表达感受、学习工作' },
+    { week: 10, unit: 'oral_u2', title: '介绍与寒暄', focus: '自我介绍、找人聊天' },
+    { week: 11, unit: 'oral_u11', title: '机场出发与登机', focus: '值机、安检、登机' },
+    { week: 12, unit: 'oral_u12', title: '入境、海关与取行李', focus: '入境问答、取行李' },
+    { week: 13, unit: 'oral_u13', title: '酒店入住与市内交通', focus: '入住、打车、坐地铁' },
+    { week: 14, unit: 'oral_u14', title: '看病买药与紧急求助', focus: '就医、买药、报警' },
+    { week: 15, unit: 'oral_u15', title: '银行、手机卡与租房', focus: '开户、办卡、租房' },
+    { week: 16, unit: 'oral_u16', title: '社交邀约与日常表达', focus: '交友、约人、日常聊天' }
+  ];
   const browseState = { key: '', query: '', page: 0 };
   const BROWSE_PAGE_SIZE = 180;
 
@@ -155,17 +174,39 @@ const Views = (function () {
     if (book.kind === 'listening') html += '<button class="btn btn-sm btn-primary" data-action="test-book" data-book="' + esc(bookId) + '">🔊 听音写意测试</button>';
     html += '</div></div>';
 
-    // 单元选择
-    html += '<div class="chip-row">';
-    html += '<button class="chip' + (!unitId ? ' chip-active' : '') + '" data-action="study-unit" data-book="' + esc(bookId) + '" data-unit="">全部</button>';
-    book.units.forEach(u => {
-      html += '<button class="chip' + (unitId === u.id ? ' chip-active' : '') + '" data-action="study-unit" data-book="' + esc(bookId) + '" data-unit="' + esc(u.id) + '">' + esc(u.name) + '</button>';
-    });
-    html += '</div>';
-    if (book.kind !== 'oral') html += '<div class="study-typing-toggle"><label class="check"><input type="checkbox" id="keyTypingToggle"' + (S().settings.keyTyping ? ' checked' : '') + '> ✍️ 键盘默写（在列表/卡片里打字助记，长期保留，可随时关闭）</label></div>';
-    if (unitId && book.kind !== 'oral') {
-      const un = book.units.find(u => u.id === unitId);
-      html += '<div class="btn-row"><button class="btn btn-primary" data-action="test-book-unit" data-book="' + esc(bookId) + '" data-unit="' + esc(unitId) + '">📝 测试本章节' + (un ? '（' + esc(un.name) + '）' : '') + '</button></div>';
+    // 单元选择 / 口语计划
+    if (book.id === 'oral') {
+      if (!unitId) {
+        html += '<div class="section-title"><h2>📅 16 周出国口语计划</h2></div><p class="muted small">按周学：每周一个场景单元，用「列表或卡片」把句子学完；点卡片上的「认识 ✓」会记录本周进度。</p>';
+        html += '<div class="card-list">';
+        ORAL_PLAN.forEach(function (wk) {
+          const u = book.units.find(function (x) { return x.id === wk.unit; });
+          if (!u) return;
+          const ws = Store.getUnitWords(book.id, u.id);
+          const learned = ws.filter(function (w) { return !!S().mastered[w.id]; }).length;
+          const pct = ws.length ? Math.round(learned / ws.length * 100) : 0;
+          html += '<div class="card oral-plan-row">' +
+            '<div class="oral-plan-head"><span class="oral-week">第 ' + wk.week + ' 周</span><span class="oral-plan-title">' + esc(wk.title) + '</span></div>' +
+            '<div class="muted small">' + esc(wk.focus) + ' · ' + ws.length + ' 句 · 已学 ' + learned + ' 句</div>' +
+            '<div class="progress"><div class="progress-bar" style="width:' + pct + '%"></div></div>' +
+            '<div class="btn-row"><button class="btn btn-sm btn-primary" data-action="study-unit" data-book="' + esc(bookId) + '" data-unit="' + esc(u.id) + '">开始本周</button></div></div>';
+        });
+        html += '</div>';
+      } else {
+        html += '<div class="btn-row"><button class="btn btn-sm" data-action="study-unit" data-book="' + esc(bookId) + '" data-unit="">← 返回 16 周计划</button></div>';
+      }
+    } else {
+      html += '<div class="chip-row">';
+      html += '<button class="chip' + (!unitId ? ' chip-active' : '') + '" data-action="study-unit" data-book="' + esc(bookId) + '" data-unit="">全部</button>';
+      book.units.forEach(u => {
+        html += '<button class="chip' + (unitId === u.id ? ' chip-active' : '') + '" data-action="study-unit" data-book="' + esc(bookId) + '" data-unit="' + esc(u.id) + '">' + esc(u.name) + '</button>';
+      });
+      html += '</div>';
+      html += '<div class="study-typing-toggle"><label class="check"><input type="checkbox" id="keyTypingToggle"' + (S().settings.keyTyping ? ' checked' : '') + '> ✍️ 键盘默写（在列表/卡片里打字助记，长期保留，可随时关闭）</label></div>';
+      if (unitId) {
+        const un = book.units.find(u => u.id === unitId);
+        html += '<div class="btn-row"><button class="btn btn-primary" data-action="test-book-unit" data-book="' + esc(bookId) + '" data-unit="' + esc(unitId) + '">📝 测试本章节' + (un ? '（' + esc(un.name) + '）' : '') + '</button></div>';
+      }
     }
 
     let words = unitId ? Store.getUnitWords(bookId, unitId) : Store.getBookWords(bookId);

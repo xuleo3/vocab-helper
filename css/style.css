@@ -543,3 +543,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .typing-bad { color: #b91c1c; font-weight: 600; }
 
 .badge-oral { background: #cffafe; color: #0e7490; }
+
+.oral-plan-row { padding: 12px; }
+.oral-plan-head { display: flex; gap: 8px; align-items: center; font-weight: 600; margin-bottom: 4px; }
+.oral-week { background: #cffafe; color: #0e7490; border-radius: 8px; padding: 2px 8px; font-size: 12px; }
