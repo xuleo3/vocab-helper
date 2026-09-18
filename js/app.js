@@ -991,6 +991,7 @@ const App = (function () {
     });
   }
   function wangluStart() {
+    if (wangluPlayer.playing) return; // 正在播放时忽略（避免空格/按钮把它从头重播）
     const lp = document.getElementById('wangluLoop');
     wangluPlayer.loop = !!(lp && lp.checked);
     // 已暂停：从当前单词继续；否则从头开始
@@ -1008,6 +1009,8 @@ const App = (function () {
     wangluPlayer.paused = false;
     wangluPlayer.playing = true;
     wangluPlayer.token++;
+    const ae = document.activeElement;
+    if (ae && ae.tagName === 'BUTTON' && ae.dataset && /^wanglu-/.test(ae.dataset.action || '')) { try { ae.blur(); } catch (e) {} }
     wangluPlayFrom(0);
   }
   function wangluToggle() {
@@ -1018,6 +1021,8 @@ const App = (function () {
   }
   function wangluPause() {
     if (!wangluPlayer.playing) return;
+    const ae = document.activeElement;
+    if (ae && ae.tagName === 'BUTTON' && ae.dataset && /^wanglu-/.test(ae.dataset.action || '')) { try { ae.blur(); } catch (e) {} }
     wangluPlayer.playing = false;
     wangluPlayer.paused = true;
     wangluPlayer.token++;
@@ -1055,7 +1060,9 @@ const App = (function () {
     document.addEventListener('keydown', function (e) {
       if (e.key !== ' ' && e.code !== 'Space') return;
       const t = e.target;
-      if (t && t.tagName && ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A'].includes(t.tagName)) return;
+      if (t && t.tagName && ['INPUT', 'TEXTAREA', 'SELECT', 'A'].includes(t.tagName)) return;
+      const isWangluBtn = !!(t && t.tagName === 'BUTTON' && t.dataset && /^wanglu-/.test(t.dataset.action || ''));
+      if (t && t.tagName === 'BUTTON' && !isWangluBtn) return;
       if (!document.getElementById('wangluProgress')) return;
       e.preventDefault();
       wangluToggle();
