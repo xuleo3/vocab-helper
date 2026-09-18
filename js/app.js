@@ -6,9 +6,11 @@ const App = (function () {
   let current = { view: 'dashboard', params: {} };
   let lastQuizSpoken = -2;
   const REVERSE_BOOKS = ['cet6', 'ship'];
+  const wangluPlayer = { ids: [], idx: 0, playing: false, loop: false, token: 0 };
   let studySearchTimer = null;
 
   function go(view, params) {
+    if (view !== 'study') wangluStop();
     current = { view: view, params: params || {} };
     render();
     window.scrollTo(0, 0);
@@ -109,6 +111,14 @@ const App = (function () {
       kt.addEventListener('change', function () { Store.setSettings({ keyTyping: kt.checked }); UI.toast(kt.checked ? '已开启键盘默写 ✍️' : '已关闭键盘默写'); render(); });
     }
     ensureActiveRow();
+    const wlLoop = document.getElementById('wangluLoop');
+    if (wlLoop && !wlLoop.dataset.boundW) { wlLoop.dataset.boundW = '1'; wlLoop.addEventListener('change', function () { wangluPlayer.loop = wlLoop.checked; wangluSetUI(); }); }
+    const wlRate = document.getElementById('wangluRate');
+    if (wlRate && !wlRate.dataset.boundW) { wlRate.dataset.boundW = '1'; wlRate.addEventListener('change', function () { Store.setSettings({ wangluRate: Number(wlRate.value) || 1 }); }); }
+    if (wangluPlayer.playing) {
+      const idsNow = (Views.getBrowseWordIds ? Views.getBrowseWordIds() : []) || [];
+      if (!document.getElementById('wordList') || idsNow.join(',') !== wangluPlayer.ids.join(',')) wangluStop();
+    }
     document.querySelectorAll('.row-type-in').forEach(function (inp) {
       if (!inp.dataset.boundR) {
         inp.dataset.boundR = '1';
@@ -664,6 +674,9 @@ const App = (function () {
     'study-practice-toggle': function () { Views.toggleStudyPractice(); render(); },
     'practice-check': function () { doPracticeCheck(); },
     'typing-check': function (el) { doTypingCheck(el.dataset.wid); },
+    'wanglu-play': function () { wangluStart(); },
+    'wanglu-pause': function () { wangluPause(); },
+    'wanglu-stop': function () { wangluStop(); },
     'toggle-theme': function () { toggleTheme(); },
     'export-data': function () { exportData(); },
     'import-data': function () { importData(); },
@@ -936,6 +949,71 @@ const App = (function () {
     if (!list || list.querySelector('.word-row.row-active')) return;
     const first = list.querySelector('.word-row');
     if (first) first.classList.add('row-active');
+  }
+
+  // 王陆语料库：整单元连续朗读
+  function wangluSetUI() {
+    const el = document.getElementById('wangluProgress');
+    if (!el) return;
+    if (wangluPlayer.playing) el.textContent = '朗读中 ' + (wangluPlayer.idx + 1) + ' / ' + wangluPlayer.ids.length + (wangluPlayer.loop ? ' · 循环' : '');
+    else el.textContent = wangluPlayer.ids.length ? '已停止' : '按 ▶ 开始';
+  }
+  function wangluHighlight(wid) {
+    const row = document.querySelector('#wordList .word-row[data-wid="' + wid + '"]');
+    if (!row) return;
+    Array.prototype.forEach.call(document.querySelectorAll('#wordList .word-row.row-active'), function (r) { r.classList.remove('row-active'); });
+    row.classList.add('row-active');
+    try { row.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { try { row.scrollIntoView(); } catch (e2) {} }
+  }
+  function wangluPlayFrom(i) {
+    if (!wangluPlayer.playing) return;
+    const ids = wangluPlayer.ids;
+    if (!ids.length) { wangluPlayer.playing = false; wangluSetUI(); return; }
+    if (i >= ids.length) {
+      if (wangluPlayer.loop) i = 0;
+      else { wangluPlayer.playing = false; wangluPlayer.idx = 0; wangluSetUI(); return; }
+    }
+    wangluPlayer.idx = i;
+    const w = Store.getWord(ids[i]);
+    if (!w) { wangluPlayFrom(i + 1); return; }
+    wangluHighlight(w.id);
+    const myToken = ++wangluPlayer.token;
+    wangluSetUI();
+    const rate = Number((Store.getState().settings || {}).wangluRate) || 1;
+    Speech.speakWord(w, {
+      rate: rate,
+      onend: function () {
+        if (!wangluPlayer.playing || myToken !== wangluPlayer.token) return;
+        wangluPlayFrom(i + 1);
+      }
+    });
+  }
+  function wangluStart() {
+    const ids = (Views.getBrowseWordIds ? Views.getBrowseWordIds() : []) || [];
+    if (!ids.length) { UI.toast('这个单元没有单词', 'error'); return; }
+    wangluPlayer.ids = ids;
+    wangluPlayer.idx = 0;
+    wangluPlayer.playing = true;
+    wangluPlayer.token++;
+    const lp = document.getElementById('wangluLoop');
+    wangluPlayer.loop = !!(lp && lp.checked);
+    wangluPlayFrom(0);
+  }
+  function wangluPause() {
+    if (!wangluPlayer.playing) return;
+    wangluPlayer.playing = false;
+    wangluPlayer.token++;
+    Speech.stop();
+    wangluSetUI();
+  }
+  function wangluStop() {
+    if (!wangluPlayer.playing && !wangluPlayer.ids.length) { wangluSetUI(); return; }
+    wangluPlayer.playing = false;
+    wangluPlayer.token++;
+    Speech.stop();
+    wangluPlayer.idx = 0;
+    wangluPlayer.ids = [];
+    wangluSetUI();
   }
 
   // ================= 全局事件绑定 =================

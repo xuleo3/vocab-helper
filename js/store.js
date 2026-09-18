@@ -20,6 +20,7 @@ const Store = (function () {
       settings: {
         defaultExam: 'cet6', ttsLang: 'auto', ttsRate: 0.95, autoSpeak: true,
         keyTyping: true, // 键盘默写：长期可开关（列表/卡片打字助记）
+        wangluRate: 1, // 王陆语料库“连续朗读”倍速
         polysemy: 'lenient', freqThreshold: 2, autoMaster: true, theme: 'light'
       },
       builtinVersion: 0,

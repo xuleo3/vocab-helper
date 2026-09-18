@@ -1,6 +1,6 @@
 // ============================================================
-// Speech：发音（优先浏览器系统朗读，失败/无声时用有道网络发音兜底）
-// 重点：连点灵敏（先取消上一次）、手机手势可用、失败尽快兜底
+// Speech：发音（系统朗读优先，失败/无声用有道网络发音兜底）
+// 支持：连点灵敏、倍速、读完回调（供“连续朗读”用）
 // ============================================================
 const Speech = (function () {
   let voices = [];
@@ -30,15 +30,17 @@ const Speech = (function () {
 
   function stopAll() {
     try { if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel(); } catch (e) {}
-    try { if (fallbackAudio) { fallbackAudio.pause(); fallbackAudio.currentTime = 0; } } catch (e) {}
+    try { if (fallbackAudio) { fallbackAudio.onended = null; fallbackAudio.pause(); fallbackAudio.currentTime = 0; } } catch (e) {}
   }
 
-  // 网络发音兜底（有道，国内可访问）
-  function playFallback(text) {
+  function playFallback(text, opts) {
+    opts = opts || {};
     try {
       if (fallbackAudio) { try { fallbackAudio.pause(); } catch (e) {} }
       fallbackAudio = new Audio('https://dict.youdao.com/dictvoice?audio=' + encodeURIComponent(text) + '&type=2');
       fallbackAudio.preload = 'auto';
+      if (opts.rate) { try { fallbackAudio.playbackRate = Math.max(0.5, Math.min(2, Number(opts.rate) || 1)); } catch (e) {} }
+      if (opts.onend) fallbackAudio.onended = function () { try { opts.onend(); } catch (e) {} };
       const p = fallbackAudio.play();
       if (p && p.catch) p.catch(function () { if (window.UI) UI.toast('发音失败：请检查网络或系统语音', 'error'); });
     } catch (e) {
@@ -51,50 +53,56 @@ const Speech = (function () {
     if (!text) return;
     opts = opts || {};
     const mySeq = ++seq;
-    stopAll(); // 连点时先停掉上一次，立刻重新发音
+    stopAll();
     refreshVoices();
 
     const settings = Store.getState().settings || {};
-    const lang = opts.lang || (settings.ttsLang === 'auto' ? 'en-US' : settings.ttsLang);
     const rate = opts.rate != null ? opts.rate : (settings.ttsRate || 0.95);
+    const lang = opts.lang || (settings.ttsLang === 'auto' ? 'en-US' : settings.ttsLang);
+    const done = function () { if (mySeq === seq && typeof opts.onend === 'function') { try { opts.onend(); } catch (e) {} } };
 
     if (typeof speechSynthesis === 'undefined' || typeof SpeechSynthesisUtterance === 'undefined') {
-      playFallback(text); return;
+      playFallback(text, { rate: rate, onend: done }); return;
     }
 
     let started = false, finished = false;
     const u = new SpeechSynthesisUtterance(text);
     u.lang = lang;
-    u.rate = rate;
+    u.rate = Math.max(0.5, Math.min(2, Number(rate) || 1));
     const v = pickVoice(settings.ttsLang);
     if (v) u.voice = v;
     u.onstart = function () { started = true; };
-    u.onend = function () { finished = true; };
-    u.onerror = function () { if (mySeq === seq && !started) playFallback(text); };
+    u.onend = function () { finished = true; done(); };
+    u.onerror = function () { if (mySeq === seq && !started) playFallback(text, { rate: rate, onend: done }); };
 
     try {
       speechSynthesis.speak(u);
       try { speechSynthesis.resume(); } catch (e) {}
     } catch (e) {
-      playFallback(text); return;
+      playFallback(text, { rate: rate, onend: done }); return;
     }
 
-    // 部分手机系统语音"哑火"：1.8 秒还没开始就立即走网络发音（已开始则不打扰）
     setTimeout(function () {
       if (mySeq !== seq || started || finished) return;
       try { speechSynthesis.cancel(); } catch (e) {}
-      playFallback(text);
+      playFallback(text, { rate: rate, onend: done });
     }, 1800);
-    // 安卓偶发 paused，稍后恢复一次
     setTimeout(function () {
       if (mySeq === seq && !finished) { try { speechSynthesis.resume(); } catch (e) {} }
     }, 600);
   }
 
-  function speakWord(w) {
+  function speakWord(w, opts) {
     if (!w) return;
-    speak(w.headword, { lang: w.examType === 'ielts' ? 'en-GB' : 'en-US' });
+    opts = opts || {};
+    speak(w.headword, {
+      lang: w.examType === 'ielts' ? 'en-GB' : 'en-US',
+      rate: opts.rate,
+      onend: opts.onend
+    });
   }
 
-  return { speak, speakWord, stop: stopAll };
+  function stop() { seq++; stopAll(); }
+
+  return { speak, speakWord, stop: stop };
 })();

@@ -24,6 +24,7 @@ const Views = (function () {
     { week: 16, unit: 'oral_u16', title: '社交邀约与日常表达', focus: '交友、约人、日常聊天' }
   ];
   const browseState = { key: '', query: '', page: 0 };
+  let lastBrowseWids = [];
   const BROWSE_PAGE_SIZE = 180;
 
   function isAdminView() {
@@ -215,6 +216,7 @@ const Views = (function () {
   }
 
   function studyBrowse(book, words, unitId) {
+    lastBrowseWids = words.map(function (w) { return w.id; });
     const key = book.id + '|' + (unitId || 'all');
     if (browseState.key !== key) { browseState.key = key; browseState.query = ''; browseState.page = 0; }
     const kw = browseState.query.trim().toLowerCase();
@@ -225,7 +227,19 @@ const Views = (function () {
     if (browseState.page >= pages) browseState.page = pages - 1;
     const start = browseState.page * BROWSE_PAGE_SIZE;
     const shown = filtered.slice(start, start + BROWSE_PAGE_SIZE);
-    let html = '<div class="study-toolbar"><input type="search" id="studySearch" class="input" placeholder="搜索英文、中文或音标…" value="' + esc(browseState.query) + '"><span class="muted small">' + (kw ? '找到 ' + filtered.length + ' / ' : '') + words.length + ' 词</span></div>';
+    let html = '';
+    if (book.kind === 'listening') {
+      const rate = S().settings.wangluRate || 1;
+      html += '<div class="card wanglu-player"><div class="muted small">🎧 连续朗读（王陆语料库专用）：不用一个个点，自动按单元顺序读完；可调倍速。</div><div class="btn-row">';
+      html += '<button class="btn btn-primary" data-action="wanglu-play">▶ 连续朗读</button>';
+      html += '<button class="btn" data-action="wanglu-pause">⏸ 暂停</button>';
+      html += '<button class="btn" data-action="wanglu-stop">⏹ 停止</button>';
+      html += '<label class="check"><input type="checkbox" id="wangluLoop"> 循环本单元</label>';
+      html += '<label class="muted small">倍速 <select class="input" id="wangluRate" style="width:auto;display:inline-block;padding:2px 6px">' + [0.6, 0.8, 1, 1.2, 1.5].map(function (x) { return '<option value="' + x + '"' + (Number(rate) === x ? ' selected' : '') + '>' + x + 'x</option>'; }).join('') + '</select></label>';
+      html += '<span class="muted small" id="wangluProgress">按 ▶ 开始</span>';
+      html += '</div></div>';
+    }
+    html += '<div class="study-toolbar"><input type="search" id="studySearch" class="input" placeholder="搜索英文、中文或音标…" value="' + esc(browseState.query) + '"><span class="muted small">' + (kw ? '找到 ' + filtered.length + ' / ' : '') + words.length + ' 词</span></div>';
     html += '<div class="word-list" id="wordList">';
     let lastGroup = null;
     const typing = !!S().settings.keyTyping && book.kind !== 'oral';
@@ -872,5 +886,6 @@ const Views = (function () {
   cardState: function(){ return cardState; }, setCardState: function(s){ cardState = Object.assign(cardState, s); },
   toggleStudyPractice: function(){ const n = !S().settings.keyTyping; Store.setSettings({ keyTyping: n }); return n; },
   getStudyPractice: function(){ return !!S().settings.keyTyping; },
-  getStudyWord: function(){ return lastStudyWid ? Store.getWord(lastStudyWid) : null; } };
+  getStudyWord: function(){ return lastStudyWid ? Store.getWord(lastStudyWid) : null; },
+  getBrowseWordIds: function(){ return lastBrowseWids.slice(); } };
 })();
