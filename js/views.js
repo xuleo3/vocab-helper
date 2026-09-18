@@ -583,6 +583,39 @@ const Views = (function () {
     return html;
   }
 
+  // ---------- 打卡图 ----------
+  function checkin() {
+    const list = Store.getTestRecords();
+    let html = '<div class="page-head"><h1>📸 打卡图</h1><p class="muted">每次测试自动记录在这里，随时可以生成/保存打卡图；以前的成绩也可以手动补一张。</p></div>';
+    if (list.length) {
+      const r0 = list[0];
+      html += '<div class="section-title"><h2>最新一次</h2></div>';
+      html += '<div class="card"><div class="muted small">' + esc(r0.bookName || '') + ' · ' + esc(r0.unitName || '') + ' · ' + fmtTime(r0.time) + '</div>' +
+        '<div class="muted small">答对 ' + r0.correct + ' / ' + r0.total + ' · 正确率 ' + (r0.total ? Math.round(r0.correct / r0.total * 100) : 0) + '%</div>' +
+        '<div class="btn-row"><button class="btn btn-primary" data-action="checkin-preview" data-idx="0">👁️ 查看打卡图</button><button class="btn" data-action="checkin-image" data-idx="0">💾 保存图片</button></div></div>';
+      html += '<div class="section-title"><h2>全部记录（' + list.length + '）</h2></div><div class="card-list">';
+      list.slice(0, 60).forEach(function (r, i) {
+        const acc = r.total ? Math.round(r.correct / r.total * 100) : 0;
+        html += '<div class="card"><div class="eb-head"><span class="eb-name">' + esc(r.bookName || '') + ' · ' + esc(r.unitName || '') + '</span><span class="muted small">' + fmtTime(r.time) + '</span></div>' +
+          '<div class="muted small">答对 ' + r.correct + ' / ' + r.total + ' · 正确率 <b class="checkin-rec-acc">' + acc + '%</b></div>' +
+          '<div class="btn-row"><button class="btn btn-sm btn-primary" data-action="checkin-preview" data-idx="' + i + '">👁️ 查看打卡图</button><button class="btn btn-sm" data-action="checkin-image" data-idx="' + i + '">💾 保存图片</button></div></div>';
+      });
+      html += '</div>';
+    } else {
+      html += '<div class="card"><p class="muted">还没有测试记录。测完一次会自动出现在这里；也可以直接用下面的「手动补一张」。</p></div>';
+    }
+    html += '<div class="section-title"><h2>手动补一张打卡图</h2></div>';
+    html += '<div class="card form-card">';
+    html += '<div class="form-group"><label>词库</label><select class="input" id="ckBook">' + visibleBooks().map(function (b) { return '<option value="' + esc(b.id) + '">' + esc(b.name) + '</option>'; }).join('') + '</select></div>';
+    html += '<div class="form-group"><label>单元 / 章节</label><input class="input" id="ckUnit" placeholder="例如：Chapter 3 · Test Paper 1"></div>';
+    html += '<div class="form-group"><label>总题数</label><input class="input" id="ckTotal" type="number" min="1" placeholder="例如 112"></div>';
+    html += '<div class="form-group"><label>答错数</label><input class="input" id="ckWrong" type="number" min="0" placeholder="例如 39"></div>';
+    html += '<div class="btn-row"><button class="btn btn-primary" data-action="checkin-manual">🖼️ 生成打卡图</button></div>';
+    html += '<p class="muted small">答对数自动算（总题数 − 答错数），正确率自动计算；生成的图可以「保存为图片」下载，也可以直接截图。</p>';
+    html += '</div>';
+    return html;
+  }
+
   // ---------- 错题本 ----------
   function errors() {
     const s = S();
@@ -875,7 +908,7 @@ const Views = (function () {
     UI.modal(html, { size: 'lg' });
   }
 
-  return { dashboard, books, study, test, errors, settings, wordModal, editWordModal, importModal, errorBookWordsModal, frequentModal, importantModal, wordContent, setBrowseQuery, setBrowsePage, quizState: function(){ return quiz; }, setQuiz: function(q){ quiz = q; },
+  return { dashboard, books, study, test, errors, checkin, settings, wordModal, editWordModal, importModal, errorBookWordsModal, frequentModal, importantModal, wordContent, setBrowseQuery, setBrowsePage, quizState: function(){ return quiz; }, setQuiz: function(q){ quiz = q; },
   cardState: function(){ return cardState; }, setCardState: function(s){ cardState = Object.assign(cardState, s); },
   toggleStudyPractice: function(){ const n = !S().settings.keyTyping; Store.setSettings({ keyTyping: n }); return n; },
   getStudyPractice: function(){ return !!S().settings.keyTyping; },

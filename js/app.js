@@ -7,6 +7,7 @@ const App = (function () {
   let lastQuizSpoken = -2;
   const REVERSE_BOOKS = ['cet6', 'ship'];
   const wangluPlayer = { ids: [], idx: 0, playing: false, paused: false, loop: false, token: 0 };
+  let lastCheckinRecord = null;
   let studySearchTimer = null;
 
   function go(view, params) {
@@ -24,6 +25,7 @@ const App = (function () {
       case 'study': html = Views.study(current.params); break;
       case 'test': html = Views.test(current.params); break;
       case 'errors': html = Views.errors(); break;
+      case 'checkin': html = Views.checkin(); break;
       case 'settings': html = Views.settings(); break;
       case 'scene': html = (typeof SceneApp !== 'undefined') ? SceneApp.html() : '<p class="muted">生活场景加载失败</p>'; break;
       default: html = Views.dashboard();
@@ -681,6 +683,16 @@ const App = (function () {
     'typing-check': function (el) { doTypingCheck(el.dataset.wid); },
     'open-checkin': function () { openCheckin(0); },
     'open-checkin-records': function () { openCheckinRecords(); },
+    'checkin-manual': function () {
+      const bid = (document.getElementById('ckBook') || {}).value || '';
+      const bk = Store.getBook(bid) || {};
+      const unit = ((document.getElementById('ckUnit') || {}).value || '').trim();
+      const total = parseInt(((document.getElementById('ckTotal') || {}).value || '0'), 10);
+      const wrong = parseInt(((document.getElementById('ckWrong') || {}).value || '0'), 10);
+      if (!total || total < 1) { UI.toast('请填写总题数', 'error'); return; }
+      if (isNaN(wrong) || wrong < 0 || wrong > total) { UI.toast('答错数应在 0 到总题数之间', 'error'); return; }
+      openCheckin({ time: Date.now(), bookId: bid, bookName: bk.name || '', unitName: unit || '全部单元', total: total, wrong: wrong, correct: total - wrong });
+    },
     'checkin-preview': function (el) { UI.closeModal(); openCheckin(el.dataset.idx); },
     'checkin-image': function (el) { saveCheckinImage(el.dataset.idx); },
     'wanglu-play': function () { wangluStart(); },
@@ -1050,7 +1062,13 @@ const App = (function () {
   }
 
   // ================= 打卡图（测试结果） =================
-  function checkinGet(idx) { const list = Store.getTestRecords(); const i = Number(idx); return (isFinite(i) ? list[i] : list[0]) || null; }
+  function checkinGet(idx) {
+    if (idx && typeof idx === 'object' && typeof idx.total === 'number') return idx;
+    if (idx === 'last' || idx === 'new') return lastCheckinRecord;
+    const list = Store.getTestRecords();
+    const i = Number(idx);
+    return (isFinite(i) ? list[i] : list[0]) || null;
+  }
   function checkinAcc(r) { return r.total ? Math.round(r.correct / r.total * 100) : 0; }
   function checkinDate(r) { const d = new Date(r.time); function p(n){return n<10?'0'+n:''+n;} return d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日 '+p(d.getHours())+':'+p(d.getMinutes()); }
   function checkinInner(r) {
@@ -1069,9 +1087,10 @@ const App = (function () {
   function openCheckin(idx) {
     const r = checkinGet(idx);
     if (!r) { UI.toast('还没有测试记录，先完成一次测试吧', 'error'); return; }
+    lastCheckinRecord = r;
     const html = '<div class="modal-head"><h3>📸 打卡图（可直接截图）</h3><button class="icon-btn" data-action="modal-close">✕</button></div>' +
       '<div class="modal-body">' + checkinInner(r) +
-      '<div class="btn-row"><button class="btn btn-primary" data-action="checkin-image" data-idx="' + (idx == null ? 0 : idx) + '">💾 保存为图片</button><button class="btn" data-action="modal-close">关闭</button></div>' +
+      '<div class="btn-row"><button class="btn btn-primary" data-action="checkin-image" data-idx="last">💾 保存为图片</button><button class="btn" data-action="modal-close">关闭</button></div>' +
       '<p class="muted small">小提示：也可以直接用手机截图这张卡片，方便每天打卡。</p></div>';
     UI.modal(html, { size: 'lg' });
   }
