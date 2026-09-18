@@ -254,7 +254,9 @@ const Views = (function () {
           UI.posBadge(w.pos) +
           '<span class="word-mean">' + UI.meaningPreview(w) + '</span>' +
           '</div>' +
-          '<div class="word-row-side">' + (mastered ? '<span class="tag tag-green">已掌握</span>' : '') + UI.speakBtn(w) + '</div>' +
+          '<div class="word-row-side">' + (mastered ? '<span class="tag tag-green">已掌握</span>' : '') +
+          '<input class="input row-type-in" data-wid="' + esc(w.id) + '" placeholder="打一遍" autocomplete="off" spellcheck="false">' +
+          UI.speakBtn(w) + '<span class="row-type-fb" data-rid="' + esc(w.id) + '"></span></div>' +
           '</div>';
       }
     });

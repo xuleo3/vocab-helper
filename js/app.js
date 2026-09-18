@@ -108,6 +108,19 @@ const App = (function () {
       kt.dataset.boundK = '1';
       kt.addEventListener('change', function () { Store.setSettings({ keyTyping: kt.checked }); UI.toast(kt.checked ? '已开启键盘默写 ✍️' : '已关闭键盘默写'); render(); });
     }
+    document.querySelectorAll('.row-type-in').forEach(function (inp) {
+      if (!inp.dataset.boundR) {
+        inp.dataset.boundR = '1';
+        ['click', 'mousedown', 'focus'].forEach(function (evt) {
+          inp.addEventListener(evt, function (e) { e.stopPropagation(); });
+        });
+        inp.addEventListener('keydown', function (e) {
+          e.stopPropagation();
+          if (e.key === 'Enter') { e.preventDefault(); rowTypeCheck(inp.dataset.wid); }
+        });
+        inp.addEventListener('blur', function () { rowTypeCheck(inp.dataset.wid); });
+      }
+    });
     document.querySelectorAll('.typing-in').forEach(function (inp) {
       if (!inp.dataset.boundT) {
         inp.dataset.boundT = '1';
@@ -861,6 +874,23 @@ const App = (function () {
     if (i < 0) return;
     for (let j = i + 1; j < ins.length; j++) {
       if (!ins[j].value.trim()) { ins[j].focus(); return; }
+    }
+  }
+
+  // 单词列表：喇叭旁“打一遍”输入框的拼写检查（只做提示，不改进度）
+  function rowTypeCheck(wid) {
+    const inp = document.querySelector('.row-type-in[data-wid="' + wid + '"]');
+    const fb = document.querySelector('.row-type-fb[data-rid="' + wid + '"]');
+    const w = Store.getWord(wid);
+    if (!inp || !fb || !w) return;
+    const val = inp.value.trim();
+    if (!val) { fb.textContent = ''; fb.className = 'row-type-fb'; return; }
+    const ev = Store.evaluateEn(w, val);
+    if (ev.correct) {
+      fb.textContent = '✓'; fb.className = 'row-type-fb ok';
+    } else {
+      const ans = (ev.expected && ev.expected.length) ? ev.expected.join(' / ') : w.headword;
+      fb.textContent = '✗ ' + ans; fb.className = 'row-type-fb bad';
     }
   }
 

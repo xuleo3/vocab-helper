@@ -547,3 +547,11 @@ button { -webkit-tap-highlight-color: transparent; }
 .oral-plan-row { padding: 12px; }
 .oral-plan-head { display: flex; gap: 8px; align-items: center; font-weight: 600; margin-bottom: 4px; }
 .oral-week { background: #cffafe; color: #0e7490; border-radius: 8px; padding: 2px 8px; font-size: 12px; }
+
+/* ---- 单词列表：喇叭旁的打字框 ---- */
+.word-row-side { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.row-type-in { width: 120px; min-width: 90px; padding: 4px 8px; font-size: 13px; }
+.row-type-fb { font-size: 12px; font-weight: 600; }
+.row-type-fb.ok { color: #15803d; }
+.row-type-fb.bad { color: #b91c1c; }
+@media (max-width: 600px) { .row-type-in { width: 92px; } }
