@@ -28,7 +28,7 @@ const Views = (function () {
   const BROWSE_PAGE_SIZE = 180;
 
   function isAdminView() {
-    // 单用户模式：默认就是“所有者”，显示全部词库与最近动态。
+    // 单用户模式：默认显示全部词库（“最近动态”已移除）。
     // 以后要分享给朋友时，可在此按设备做开关（visibleBooks 里保留了朋友逐步解锁逻辑）。
     try { return localStorage.getItem('vocab_owner_mode') !== '0'; } catch (e) { return true; }
   }
@@ -91,16 +91,7 @@ const Views = (function () {
     html += '<button class="btn btn-sm btn-primary" data-action="cloud-sync-now">🔄 立即同步</button>';
     html += '<button class="btn btn-sm" data-action="goto-settings-cloud">⚙️ 云同步设置</button></div></div>';
 
-    // 最近动态
-    if (isAdminView()) {
-      html += '<div class="section-title"><h2>最近动态</h2></div>';
-      if (!s.activity.length) html += '<p class="muted">暂无动态。完成一次测试后这里会显示记录。</p>';
-      else {
-        html += '<div class="card-list">' + s.activity.slice(0, 8).map(a =>
-          '<div class="card activity-item"><span class="muted">' + fmtTime(a.time) + '</span> <span>' + esc(a.text) + '</span></div>'
-        ).join('') + '</div>';
-      }
-    }
+    // （“最近动态”板块已按需求移除；活动数据仍保留，不影响其它功能）
     return html;
   }
 
