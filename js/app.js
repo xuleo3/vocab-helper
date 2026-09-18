@@ -108,6 +108,7 @@ const App = (function () {
       kt.dataset.boundK = '1';
       kt.addEventListener('change', function () { Store.setSettings({ keyTyping: kt.checked }); UI.toast(kt.checked ? '已开启键盘默写 ✍️' : '已关闭键盘默写'); render(); });
     }
+    ensureActiveRow();
     document.querySelectorAll('.row-type-in').forEach(function (inp) {
       if (!inp.dataset.boundR) {
         inp.dataset.boundR = '1';
@@ -115,8 +116,16 @@ const App = (function () {
           inp.addEventListener(evt, function (e) { e.stopPropagation(); });
         });
         inp.addEventListener('keydown', function (e) {
-          e.stopPropagation();
-          if (e.key === 'Enter') { e.preventDefault(); rowTypeCheck(inp.dataset.wid); }
+          if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            e.preventDefault(); e.stopPropagation();
+            moveActiveRow(e.key === 'ArrowDown' ? 1 : -1, { focus: true, speak: true });
+            return;
+          }
+          if (e.key === 'Enter') {
+            e.preventDefault(); e.stopPropagation();
+            rowTypeCheck(inp.dataset.wid);
+            moveActiveRow(1, { focus: true, speak: false });
+          }
         });
         inp.addEventListener('blur', function () { rowTypeCheck(inp.dataset.wid); });
       }
@@ -125,10 +134,15 @@ const App = (function () {
       if (!inp.dataset.boundT) {
         inp.dataset.boundT = '1';
         inp.addEventListener('keydown', function (e) {
+          if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            e.preventDefault(); e.stopPropagation();
+            moveActiveRow(e.key === 'ArrowDown' ? 1 : -1, { focus: true, speak: true });
+            return;
+          }
           if (e.key === 'Enter') {
             e.preventDefault(); e.stopPropagation();
             doTypingCheck(inp.dataset.wid);
-            focusNextTypingInput(inp);
+            moveActiveRow(1, { focus: true, speak: false });
           }
         });
       }
@@ -894,6 +908,36 @@ const App = (function () {
     }
   }
 
+  // 学习列表：键盘上下移动并朗读当前单词
+  function moveActiveRow(delta, opts) {
+    opts = opts || {};
+    const rows = Array.prototype.slice.call(document.querySelectorAll('#wordList .word-row'));
+    if (!rows.length) return;
+    let cur = -1;
+    const focused = document.activeElement;
+    if (focused && focused.closest) { const fr = focused.closest('#wordList .word-row'); if (fr) cur = rows.indexOf(fr); }
+    if (cur < 0) { const marked = document.querySelector('#wordList .word-row.row-active'); cur = marked ? rows.indexOf(marked) : -1; }
+    if (cur < 0) cur = delta > 0 ? -1 : rows.length;
+    const next = Math.max(0, Math.min(rows.length - 1, cur + delta));
+    rows.forEach(function (r) { r.classList.remove('row-active'); });
+    const row = rows[next];
+    row.classList.add('row-active');
+    const inp = row.querySelector('.row-type-in, .typing-in');
+    if (opts.focus !== false && inp) { try { inp.focus({ preventScroll: true }); } catch (e) { try { inp.focus(); } catch (e2) {} } }
+    try { row.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { try { row.scrollIntoView(); } catch (e2) {} }
+    if (opts.speak !== false) {
+      const wid = row.dataset.wid || (inp && inp.dataset.wid);
+      const w = wid ? Store.getWord(wid) : null;
+      if (w) Speech.speakWord(w);
+    }
+  }
+  function ensureActiveRow() {
+    const list = document.getElementById('wordList');
+    if (!list || list.querySelector('.word-row.row-active')) return;
+    const first = list.querySelector('.word-row');
+    if (first) first.classList.add('row-active');
+  }
+
   // ================= 全局事件绑定 =================
   function bind() {
     // 导航
@@ -910,11 +954,27 @@ const App = (function () {
       if (Actions[action]) { e.preventDefault(); Actions[action](el); }
     });
 
+    // 学习列表：上下键移动并朗读当前单词（焦点不在输入框时也可用）
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      const t = e.target;
+      const isRowInput = !!(t && t.classList && (t.classList.contains('row-type-in') || t.classList.contains('typing-in')));
+      if (!isRowInput && t && t.tagName && ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return;
+      if (!document.querySelector('#wordList .word-row')) return;
+      e.preventDefault();
+      moveActiveRow(e.key === 'ArrowDown' ? 1 : -1, { focus: true, speak: true });
+    });
+
     // 全局 Enter：测试已揭示答案后，Enter 直接下一题/完成
     document.addEventListener('keydown', function (e) {
       if (e.key !== 'Enter') return;
       const t = e.target;
       if (t && t.tagName && ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A'].includes(t.tagName)) return;
+      if (document.querySelector('#wordList .word-row')) {
+        const row = document.querySelector('#wordList .word-row.row-active') || document.querySelector('#wordList .word-row');
+        const inp = row && row.querySelector('.row-type-in, .typing-in');
+        if (inp) { e.preventDefault(); try { inp.focus(); } catch (err) {} return; }
+      }
       const q = Views.quizState();
       if (!q || !q.revealed || q.finished) return;
       if (!document.querySelector('.quiz-card')) return;

@@ -555,3 +555,6 @@ button { -webkit-tap-highlight-color: transparent; }
 .row-type-fb.ok { color: #15803d; }
 .row-type-fb.bad { color: #b91c1c; }
 @media (max-width: 600px) { .row-type-in { width: 92px; } }
+
+.word-row.row-active { outline: 2px solid #6366f1; outline-offset: -2px; background: rgba(99,102,241,0.06); }
+.word-row { scroll-margin: 120px; }

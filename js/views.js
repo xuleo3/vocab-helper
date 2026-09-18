@@ -237,7 +237,7 @@ const Views = (function () {
       if (typing) {
         const _zh = (w.senses && w.senses[0] && w.senses[0].meaning) || '';
         const _al = (w.aliases && w.aliases.length) ? w.aliases.join('；') : '';
-        html += '<div class="word-row typing-row">' +
+        html += '<div class="word-row typing-row" data-wid="' + esc(w.id) + '">' +
           '<div class="word-row-main"><span class="word-mean typing-zh">' + esc(_zh) + '</span></div>' +
           '<div class="word-row-side typing-side">' +
           '<input class="input typing-in" data-wid="' + esc(w.id) + '" placeholder="打英文" autocomplete="off" spellcheck="false">' +
