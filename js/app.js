@@ -124,7 +124,7 @@ const App = (function () {
           if (e.key === 'Enter') {
             e.preventDefault(); e.stopPropagation();
             rowTypeCheck(inp.dataset.wid);
-            moveActiveRow(1, { focus: true, speak: false });
+            moveActiveRow(1, { focus: true, speak: true });
           }
         });
         inp.addEventListener('blur', function () { rowTypeCheck(inp.dataset.wid); });
@@ -142,7 +142,7 @@ const App = (function () {
           if (e.key === 'Enter') {
             e.preventDefault(); e.stopPropagation();
             doTypingCheck(inp.dataset.wid);
-            moveActiveRow(1, { focus: true, speak: false });
+            moveActiveRow(1, { focus: true, speak: true });
           }
         });
       }
