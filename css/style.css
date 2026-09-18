@@ -558,3 +558,16 @@ button { -webkit-tap-highlight-color: transparent; }
 
 .word-row.row-active { outline: 2px solid #6366f1; outline-offset: -2px; background: rgba(99,102,241,0.06); }
 .word-row { scroll-margin: 120px; }
+
+/* ---- 打卡图预览 ---- */
+.checkin-card{background:#fff;border:1px solid #e2e8f0;border-radius:18px;padding:22px 18px;text-align:center}
+.checkin-brand{color:#4f46e5;font-weight:700;margin-bottom:10px}
+.checkin-book{font-size:22px;font-weight:700}
+.checkin-unit{color:#475569;margin-bottom:10px}
+.checkin-acc{font-size:56px;font-weight:800;color:#16a34a;line-height:1.1}
+.checkin-acc-label{color:#64748b;margin-bottom:14px}
+.checkin-stats{display:flex;justify-content:space-around;margin:10px 0}
+.checkin-stats b{display:block;font-size:22px}
+.checkin-stats span{font-size:12px;color:#64748b}
+.checkin-date{color:#64748b;margin-top:8px}
+.checkin-foot{color:#94a3b8;font-size:12px;margin-top:6px}

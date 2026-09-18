@@ -440,6 +440,7 @@ const Views = (function () {
     html += '<div class="form-group"><label class="check"><input type="checkbox" id="optShowPhonetic" checked> 显示音标</label></div>';
     html += '<div class="form-group"><label>单词数量</label><select class="input" id="optCount"><option value="all">全部</option><option value="20">20</option><option value="30">30</option><option value="50">50</option></select></div>';
 
+    html += '<div class="btn-row"><button class="btn" data-action="open-checkin-records">🖼️ 打卡记录（可生成图）</button></div>';
     html += '<div class="btn-row"><button class="btn btn-primary btn-lg" data-action="start-test" data-preset="' + esc(preset) + '">开始测试 🚀</button></div>';
     return html;
   }
@@ -561,6 +562,7 @@ const Views = (function () {
     html += '<div class="result-line">答对 <b>' + correct + '</b> / ' + total + ' · 答错 <b>' + wrong + '</b> 词</div>';
     html += '<div class="result-line muted">错词已自动加入「' + esc(quiz.resultBookName) + '」</div>';
     html += '</div>';
+    html += '<div class="btn-row"><button class="btn btn-primary" data-action="open-checkin">📸 生成打卡图</button><button class="btn" data-action="open-checkin-records">🖼️ 打卡记录</button></div>';
 
     if (wrongItems.length) {
       html += '<div class="section-title"><h2>错词复习（' + wrongItems.length + '）</h2></div>';

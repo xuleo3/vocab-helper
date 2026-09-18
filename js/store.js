@@ -13,6 +13,7 @@ const Store = (function () {
       frequent: { words: {} },  // wid -> {wrongCount,firstAt,lastAt,manual}
       important: { words: {} },  // 重要单词本：wid -> {addedAt}
       testSessions: {},  // 进行中的测试会话：key -> {scope, answered, startedAt, updatedAt}
+      testRecords: [],   // 测试记录（用于生成打卡图）：{time,bookName,unitName,total,correct,wrong}
       answerAliases: {}, // wid -> [用户确认可接受的中文说法]
       answerEn: {},      // wid -> [用户确认可接受的英文写法/全称]
       mastered: {},     // wid -> ts
@@ -47,6 +48,7 @@ const Store = (function () {
     state.frequent = state.frequent || { words: {} };
     state.important = state.important || { words: {} };
     state.testSessions = state.testSessions || {};
+    state.testRecords = state.testRecords || [];
     state.answerAliases = state.answerAliases || {};
     state.answerEn = state.answerEn || {};
     state.activity = state.activity || [];
@@ -371,6 +373,16 @@ const Store = (function () {
   function getTestSession(key) { return state.testSessions[key] || null; }
   function clearTestSession(key) { if (key) delete state.testSessions[key]; save(); }
 
+  // ---------- 测试记录（打卡图） ----------
+  function addTestRecord(rec) {
+    const r = Object.assign({ time: Date.now() }, rec || {});
+    state.testRecords.unshift(r);
+    if (state.testRecords.length > 200) state.testRecords.length = 200;
+    save();
+    return r;
+  }
+  function getTestRecords() { return state.testRecords || []; }
+
   function markMastered(wid, on) {
     if (on) state.mastered[wid] = Date.now(); else delete state.mastered[wid];
     save();
@@ -653,6 +665,7 @@ const Store = (function () {
       frequent: state.frequent,
       wordStats: state.wordStats,
       testSessions: state.testSessions,
+      testRecords: state.testRecords,
       answerAliases: state.answerAliases,
       answerEn: state.answerEn,
       stats: state.stats,
@@ -664,7 +677,7 @@ const Store = (function () {
   function importSyncData(json) {
     const parsed = JSON.parse(json);
     if (!parsed || parsed.syncVersion !== 2) throw new Error('不是有效的云同步数据');
-    ['mastered', 'errorBooks', 'important', 'frequent', 'wordStats', 'testSessions', 'answerAliases', 'answerEn', 'stats', 'settings', 'activity'].forEach(function (k) {
+    ['mastered', 'errorBooks', 'important', 'frequent', 'wordStats', 'testSessions', 'testRecords', 'answerAliases', 'answerEn', 'stats', 'settings', 'activity'].forEach(function (k) {
       if (parsed[k] !== undefined) state[k] = parsed[k];
     });
     saveQuiet();
@@ -690,6 +703,7 @@ const Store = (function () {
     unitNameOf, getUnitIdByName,
     recordWrongWord, markCorrectWord, bumpWordStats, finishTestStats,
     sessionKey, saveTestSession, getTestSession, clearTestSession,
+    addTestRecord, getTestRecords,
     evaluateAnswer, isCorrect, normalize,
     evaluateEn, isCorrectEn, acceptEnAlias, getEnAliases,
     acceptAnswerAlias,

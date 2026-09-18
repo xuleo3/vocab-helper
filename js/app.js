@@ -538,6 +538,11 @@ const App = (function () {
     const sc = q.scope;
     Store.finishTestStats(q.words.length, q.correct);
     q.resultBookName = sc.ebName || '';
+    {
+      const bk = Store.getBook(sc.bookId) || {};
+      const unitName = sc.unitId ? (((bk.units || []).find(function (u) { return u.id === sc.unitId; }) || {}).name || '') : '全部单元';
+      Store.addTestRecord({ bookId: sc.bookId || '', bookName: bk.name || '', unitName: unitName, scopeLabel: sc.scopeLabel || '', total: q.words.length, correct: q.correct, wrong: q.wrong, kind: sc.kind || '', listen: !!q.listen, reverse: !!q.reverse });
+    }
     Store.addActivity('test', '完成「' + sc.scopeLabel + '」测试：答对 ' + q.correct + '，答错 ' + q.wrong + (q.resultBookName ? ' → 错词已实时加入「' + q.resultBookName + '」' : ''));
     if (q.scope.sessionKey) Store.clearTestSession(q.scope.sessionKey);
     q.finished = true;
@@ -674,6 +679,10 @@ const App = (function () {
     'study-practice-toggle': function () { Views.toggleStudyPractice(); render(); },
     'practice-check': function () { doPracticeCheck(); },
     'typing-check': function (el) { doTypingCheck(el.dataset.wid); },
+    'open-checkin': function () { openCheckin(0); },
+    'open-checkin-records': function () { openCheckinRecords(); },
+    'checkin-preview': function (el) { UI.closeModal(); openCheckin(el.dataset.idx); },
+    'checkin-image': function (el) { saveCheckinImage(el.dataset.idx); },
     'wanglu-play': function () { wangluStart(); },
     'wanglu-pause': function () { wangluPause(); },
     'wanglu-stop': function () { wangluStop(); },
@@ -1038,6 +1047,88 @@ const App = (function () {
     wangluPlayer.idx = 0;
     wangluPlayer.ids = [];
     wangluSetUI();
+  }
+
+  // ================= 打卡图（测试结果） =================
+  function checkinGet(idx) { const list = Store.getTestRecords(); const i = Number(idx); return (isFinite(i) ? list[i] : list[0]) || null; }
+  function checkinAcc(r) { return r.total ? Math.round(r.correct / r.total * 100) : 0; }
+  function checkinDate(r) { const d = new Date(r.time); function p(n){return n<10?'0'+n:''+n;} return d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日 '+p(d.getHours())+':'+p(d.getMinutes()); }
+  function checkinInner(r) {
+    const acc = checkinAcc(r);
+    return '<div class="checkin-card">' +
+      '<div class="checkin-brand">📚 词汇助手 · 今日打卡</div>' +
+      '<div class="checkin-book">' + UI.esc(r.bookName || '') + '</div>' +
+      '<div class="checkin-unit">' + UI.esc(r.unitName || r.scopeLabel || '') + '</div>' +
+      '<div class="checkin-acc">' + acc + '%</div>' +
+      '<div class="checkin-acc-label">正确率</div>' +
+      '<div class="checkin-stats"><div><b>' + r.correct + '</b><span>答对</span></div><div><b>' + r.wrong + '</b><span>答错</span></div><div><b>' + r.total + '</b><span>总词数</span></div></div>' +
+      '<div class="checkin-date">' + checkinDate(r) + '</div>' +
+      '<div class="checkin-foot">坚持每天打卡 · 每天进步一点点</div>' +
+      '</div>';
+  }
+  function openCheckin(idx) {
+    const r = checkinGet(idx);
+    if (!r) { UI.toast('还没有测试记录，先完成一次测试吧', 'error'); return; }
+    const html = '<div class="modal-head"><h3>📸 打卡图（可直接截图）</h3><button class="icon-btn" data-action="modal-close">✕</button></div>' +
+      '<div class="modal-body">' + checkinInner(r) +
+      '<div class="btn-row"><button class="btn btn-primary" data-action="checkin-image" data-idx="' + (idx == null ? 0 : idx) + '">💾 保存为图片</button><button class="btn" data-action="modal-close">关闭</button></div>' +
+      '<p class="muted small">小提示：也可以直接用手机截图这张卡片，方便每天打卡。</p></div>';
+    UI.modal(html, { size: 'lg' });
+  }
+  function openCheckinRecords() {
+    const list = Store.getTestRecords();
+    if (!list.length) { UI.toast('还没有测试记录，先测一轮吧', 'error'); return; }
+    let h = '<div class="modal-head"><h3>🖼️ 打卡记录</h3><button class="icon-btn" data-action="modal-close">✕</button></div><div class="modal-body"><p class="muted small">每次测试都会自动记录；可以随时生成/保存打卡图，也可以直接截图。</p><div class="card-list">';
+    list.slice(0, 60).forEach(function (r, i) {
+      h += '<div class="card"><div class="eb-head"><span class="eb-name">' + UI.esc(r.bookName || '') + ' · ' + UI.esc(r.unitName || '') + '</span><span class="muted small">' + checkinDate(r) + '</span></div>' +
+        '<div class="muted small">答对 ' + r.correct + ' / ' + r.total + ' · 正确率 ' + checkinAcc(r) + '%</div>' +
+        '<div class="btn-row"><button class="btn btn-sm btn-primary" data-action="checkin-preview" data-idx="' + i + '">👁️ 查看打卡图</button><button class="btn btn-sm" data-action="checkin-image" data-idx="' + i + '">💾 保存图片</button></div></div>';
+    });
+    h += '</div></div>';
+    UI.modal(h, { size: 'lg' });
+  }
+  function drawCheckin(r) {
+    const W = 1080, H = 1350;
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const x = c.getContext('2d');
+    const F = 'bold 44px "Microsoft YaHei", "PingFang SC", sans-serif';
+    x.fillStyle = '#eef2ff'; x.fillRect(0, 0, W, H);
+    x.fillStyle = '#ffffff'; x.strokeStyle = '#e2e8f0'; x.lineWidth = 3;
+    const rr = function (px, py, w, h, rad) { x.beginPath(); x.moveTo(px + rad, py); x.arcTo(px + w, py, px + w, py + h, rad); x.arcTo(px + w, py + h, px, py + h, rad); x.arcTo(px, py + h, px, py, rad); x.arcTo(px, py, px + w, py, rad); x.closePath(); };
+    rr(60, 60, W - 120, H - 120, 40); x.fill(); x.stroke();
+    x.textAlign = 'center';
+    x.fillStyle = '#4f46e5'; x.font = 'bold 46px "Microsoft YaHei", "PingFang SC", sans-serif'; x.fillText('词汇助手 · 今日打卡', W / 2, 200);
+    x.fillStyle = '#0f172a'; x.font = 'bold 60px "Microsoft YaHei", "PingFang SC", sans-serif'; x.fillText(r.bookName || '', W / 2, 320);
+    x.fillStyle = '#475569'; x.font = 'bold 42px "Microsoft YaHei", "PingFang SC", sans-serif'; x.fillText(r.unitName || r.scopeLabel || '', W / 2, 400);
+    x.fillStyle = '#16a34a'; x.font = 'bold 220px "Microsoft YaHei", "PingFang SC", sans-serif'; x.fillText(checkinAcc(r) + '%', W / 2, 760);
+    x.fillStyle = '#64748b'; x.font = '40px "Microsoft YaHei", "PingFang SC", sans-serif'; x.fillText('正确率', W / 2, 830);
+    const stats = [['答对', r.correct], ['答错', r.wrong], ['总词数', r.total]];
+    stats.forEach(function (it, i) {
+      const bx = 130 + i * 280;
+      x.fillStyle = '#f8fafc'; rr(bx, 900, 240, 170, 24); x.fill();
+      x.fillStyle = '#0f172a'; x.font = 'bold 72px "Microsoft YaHei", "PingFang SC", sans-serif'; x.fillText(String(it[1]), bx + 120, 990);
+      x.fillStyle = '#64748b'; x.font = '36px "Microsoft YaHei", "PingFang SC", sans-serif'; x.fillText(it[0], bx + 120, 1045);
+    });
+    x.fillStyle = '#64748b'; x.font = '36px "Microsoft YaHei", "PingFang SC", sans-serif'; x.fillText(checkinDate(r), W / 2, 1170);
+    x.fillStyle = '#94a3b8'; x.font = '34px "Microsoft YaHei", "PingFang SC", sans-serif'; x.fillText('坚持每天打卡 · 每天进步一点点', W / 2, 1250);
+    return c;
+  }
+  function saveCheckinImage(idx) {
+    const r = checkinGet(idx);
+    if (!r) { UI.toast('还没有测试记录', 'error'); return; }
+    const c = drawCheckin(r);
+    const name = '打卡-' + String(r.unitName || r.bookName || '英语').replace(/[\\/:*?"<>|\s]/g, '') + '-' + new Date(r.time).toISOString().slice(0, 10) + '.png';
+    if (c.toBlob) {
+      c.toBlob(function (b) {
+        if (!b) { UI.toast('生成图片失败', 'error'); return; }
+        const url = URL.createObjectURL(b); const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+        UI.toast('图片已生成，请查看下载 ⬇️');
+      }, 'image/png');
+    } else {
+      const a = document.createElement('a'); a.href = c.toDataURL('image/png'); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      UI.toast('图片已生成，请查看下载 ⬇️');
+    }
   }
 
   // ================= 全局事件绑定 =================
