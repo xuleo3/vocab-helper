@@ -221,8 +221,8 @@ const Views = (function () {
     let html = '';
     if (book.kind === 'listening') {
       const rate = S().settings.wangluRate || 1;
-      html += '<div class="card wanglu-player"><div class="muted small">🎧 连续朗读（王陆语料库专用）：不用一个个点，自动按单元顺序读完；可调倍速。</div><div class="btn-row">';
-      html += '<button class="btn btn-primary" data-action="wanglu-play">▶ 连续朗读</button>';
+      html += '<div class="card wanglu-player"><div class="muted small">🎧 连续朗读（王陆语料库专用）：不用一个个点，自动按单元顺序读完；可调倍速。没听清时按 <b>空格键</b> 暂停，再按一次从当前单词继续。</div><div class="btn-row">';
+      html += '<button class="btn btn-primary" data-action="wanglu-play">▶ 播放 / 继续</button>';
       html += '<button class="btn" data-action="wanglu-pause">⏸ 暂停</button>';
       html += '<button class="btn" data-action="wanglu-stop">⏹ 停止</button>';
       html += '<label class="check"><input type="checkbox" id="wangluLoop"> 循环本单元</label>';

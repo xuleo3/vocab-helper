@@ -6,7 +6,7 @@ const App = (function () {
   let current = { view: 'dashboard', params: {} };
   let lastQuizSpoken = -2;
   const REVERSE_BOOKS = ['cet6', 'ship'];
-  const wangluPlayer = { ids: [], idx: 0, playing: false, loop: false, token: 0 };
+  const wangluPlayer = { ids: [], idx: 0, playing: false, paused: false, loop: false, token: 0 };
   let studySearchTimer = null;
 
   function go(view, params) {
@@ -955,8 +955,10 @@ const App = (function () {
   function wangluSetUI() {
     const el = document.getElementById('wangluProgress');
     if (!el) return;
-    if (wangluPlayer.playing) el.textContent = '朗读中 ' + (wangluPlayer.idx + 1) + ' / ' + wangluPlayer.ids.length + (wangluPlayer.loop ? ' · 循环' : '');
-    else el.textContent = wangluPlayer.ids.length ? '已停止' : '按 ▶ 开始';
+    if (wangluPlayer.playing) el.textContent = '朗读中 ' + (wangluPlayer.idx + 1) + ' / ' + wangluPlayer.ids.length + (wangluPlayer.loop ? ' · 循环' : '') + '（空格暂停）';
+    else if (wangluPlayer.paused) el.textContent = '已暂停 ' + (wangluPlayer.idx + 1) + ' / ' + wangluPlayer.ids.length + '（空格继续）';
+    else if (wangluPlayer.ids.length) el.textContent = '播放完毕（空格或 ▶ 重播）';
+    else el.textContent = '按 ▶ 开始（空格播放）';
   }
   function wangluHighlight(wid) {
     const row = document.querySelector('#wordList .word-row[data-wid="' + wid + '"]');
@@ -971,7 +973,7 @@ const App = (function () {
     if (!ids.length) { wangluPlayer.playing = false; wangluSetUI(); return; }
     if (i >= ids.length) {
       if (wangluPlayer.loop) i = 0;
-      else { wangluPlayer.playing = false; wangluPlayer.idx = 0; wangluSetUI(); return; }
+      else { wangluPlayer.playing = false; wangluPlayer.paused = false; wangluPlayer.idx = 0; wangluSetUI(); return; }
     }
     wangluPlayer.idx = i;
     const w = Store.getWord(ids[i]);
@@ -989,19 +991,35 @@ const App = (function () {
     });
   }
   function wangluStart() {
+    const lp = document.getElementById('wangluLoop');
+    wangluPlayer.loop = !!(lp && lp.checked);
+    // 已暂停：从当前单词继续；否则从头开始
+    if (wangluPlayer.paused && wangluPlayer.ids.length) {
+      wangluPlayer.paused = false;
+      wangluPlayer.playing = true;
+      wangluPlayer.token++;
+      wangluPlayFrom(Math.min(wangluPlayer.idx, wangluPlayer.ids.length - 1));
+      return;
+    }
     const ids = (Views.getBrowseWordIds ? Views.getBrowseWordIds() : []) || [];
     if (!ids.length) { UI.toast('这个单元没有单词', 'error'); return; }
     wangluPlayer.ids = ids;
     wangluPlayer.idx = 0;
+    wangluPlayer.paused = false;
     wangluPlayer.playing = true;
     wangluPlayer.token++;
-    const lp = document.getElementById('wangluLoop');
-    wangluPlayer.loop = !!(lp && lp.checked);
     wangluPlayFrom(0);
+  }
+  function wangluToggle() {
+    if (wangluPlayer.playing) { wangluPause(); return; }
+    if (wangluPlayer.paused && wangluPlayer.ids.length) { wangluStart(); return; }
+    if (wangluPlayer.ids.length) { wangluStart(); return; }
+    wangluStart();
   }
   function wangluPause() {
     if (!wangluPlayer.playing) return;
     wangluPlayer.playing = false;
+    wangluPlayer.paused = true;
     wangluPlayer.token++;
     Speech.stop();
     wangluSetUI();
@@ -1009,6 +1027,7 @@ const App = (function () {
   function wangluStop() {
     if (!wangluPlayer.playing && !wangluPlayer.ids.length) { wangluSetUI(); return; }
     wangluPlayer.playing = false;
+    wangluPlayer.paused = false;
     wangluPlayer.token++;
     Speech.stop();
     wangluPlayer.idx = 0;
@@ -1030,6 +1049,16 @@ const App = (function () {
       if (!el) return;
       const action = el.dataset.action;
       if (Actions[action]) { e.preventDefault(); Actions[action](el); }
+    });
+
+    // 王陆连续朗读：空格键暂停 / 继续（仅当页面有连续朗读面板时生效）
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== ' ' && e.code !== 'Space') return;
+      const t = e.target;
+      if (t && t.tagName && ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A'].includes(t.tagName)) return;
+      if (!document.getElementById('wangluProgress')) return;
+      e.preventDefault();
+      wangluToggle();
     });
 
     // 学习列表：上下键移动并朗读当前单词（焦点不在输入框时也可用）
