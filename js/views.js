@@ -586,33 +586,44 @@ const Views = (function () {
   // ---------- 打卡图 ----------
   function checkin() {
     const list = Store.getTestRecords();
-    let html = '<div class="page-head"><h1>📸 打卡图</h1><p class="muted">每次测试自动记录在这里，随时可以生成/保存打卡图；以前的成绩也可以手动补一张。</p></div>';
+    let html = '<div class="page-head"><h1>📸 打卡图</h1><p class="muted">每次测试完成后会自动按单元记录，不需要手动填；点某个单元就能查看/保存打卡图。</p></div>';
     if (list.length) {
-      const r0 = list[0];
-      html += '<div class="section-title"><h2>最新一次</h2></div>';
-      html += '<div class="card"><div class="muted small">' + esc(r0.bookName || '') + ' · ' + esc(r0.unitName || '') + ' · ' + fmtTime(r0.time) + '</div>' +
-        '<div class="muted small">答对 ' + r0.correct + ' / ' + r0.total + ' · 正确率 ' + (r0.total ? Math.round(r0.correct / r0.total * 100) : 0) + '%</div>' +
-        '<div class="btn-row"><button class="btn btn-primary" data-action="checkin-preview" data-idx="0">👁️ 查看打卡图</button><button class="btn" data-action="checkin-image" data-idx="0">💾 保存图片</button></div></div>';
-      html += '<div class="section-title"><h2>全部记录（' + list.length + '）</h2></div><div class="card-list">';
-      list.slice(0, 60).forEach(function (r, i) {
+      const unitMap = {};
+      list.forEach(function (r, i) {
+        const key = (r.bookName || '') + '||' + (r.unitName || '');
+        if (!unitMap[key]) unitMap[key] = { latest: r, latestIdx: i, count: 0 };
+        unitMap[key].count++;
+      });
+      const units = Object.keys(unitMap).map(function (k) { return unitMap[k]; }).sort(function (a, b) { return b.latest.time - a.latest.time; });
+      html += '<div class="section-title"><h2>按单元（' + units.length + ' 个单元）</h2></div><div class="card-list">';
+      units.forEach(function (u) {
+        const r = u.latest;
         const acc = r.total ? Math.round(r.correct / r.total * 100) : 0;
         html += '<div class="card"><div class="eb-head"><span class="eb-name">' + esc(r.bookName || '') + ' · ' + esc(r.unitName || '') + '</span><span class="muted small">' + fmtTime(r.time) + '</span></div>' +
-          '<div class="muted small">答对 ' + r.correct + ' / ' + r.total + ' · 正确率 <b class="checkin-rec-acc">' + acc + '%</b></div>' +
+          '<div class="muted small">最近一次：答对 ' + r.correct + ' / ' + r.total + ' · 正确率 <b class="checkin-rec-acc">' + acc + '%</b> · 共测 ' + u.count + ' 次</div>' +
+          '<div class="btn-row"><button class="btn btn-sm btn-primary" data-action="checkin-preview" data-idx="' + u.latestIdx + '">👁️ 查看打卡图</button><button class="btn btn-sm" data-action="checkin-image" data-idx="' + u.latestIdx + '">💾 保存图片</button></div></div>';
+      });
+      html += '</div>';
+      html += '<div class="section-title"><h2>全部记录（' + list.length + '）</h2></div><div class="card-list">';
+      list.slice(0, 60).forEach(function (r, i) {
+        const acc2 = r.total ? Math.round(r.correct / r.total * 100) : 0;
+        html += '<div class="card"><div class="eb-head"><span class="eb-name">' + esc(r.bookName || '') + ' · ' + esc(r.unitName || '') + '</span><span class="muted small">' + fmtTime(r.time) + '</span></div>' +
+          '<div class="muted small">答对 ' + r.correct + ' / ' + r.total + ' · 正确率 <b class="checkin-rec-acc">' + acc2 + '%</b></div>' +
           '<div class="btn-row"><button class="btn btn-sm btn-primary" data-action="checkin-preview" data-idx="' + i + '">👁️ 查看打卡图</button><button class="btn btn-sm" data-action="checkin-image" data-idx="' + i + '">💾 保存图片</button></div></div>';
       });
       html += '</div>';
     } else {
-      html += '<div class="card"><p class="muted">还没有测试记录。测完一次会自动出现在这里；也可以直接用下面的「手动补一张」。</p></div>';
+      html += '<div class="card"><p class="muted">还没有测试记录——测完任意一个单元后，这里会自动出现该单元的打卡图。</p></div>';
     }
-    html += '<div class="section-title"><h2>手动补一张打卡图</h2></div>';
-    html += '<div class="card form-card">';
+    html += '<details class="card" style="margin-top:12px"><summary class="muted" style="cursor:pointer">考过但没记录？（仅用于打卡功能上线前的旧成绩，平时不用点）</summary>';
+    html += '<div class="form-card" style="margin-top:10px">';
     html += '<div class="form-group"><label>词库</label><select class="input" id="ckBook">' + visibleBooks().map(function (b) { return '<option value="' + esc(b.id) + '">' + esc(b.name) + '</option>'; }).join('') + '</select></div>';
     html += '<div class="form-group"><label>单元 / 章节</label><input class="input" id="ckUnit" placeholder="例如：Chapter 3 · Test Paper 1"></div>';
     html += '<div class="form-group"><label>总题数</label><input class="input" id="ckTotal" type="number" min="1" placeholder="例如 112"></div>';
     html += '<div class="form-group"><label>答错数</label><input class="input" id="ckWrong" type="number" min="0" placeholder="例如 39"></div>';
-    html += '<div class="btn-row"><button class="btn btn-primary" data-action="checkin-manual">🖼️ 生成打卡图</button></div>';
-    html += '<p class="muted small">答对数自动算（总题数 − 答错数），正确率自动计算；生成的图可以「保存为图片」下载，也可以直接截图。</p>';
-    html += '</div>';
+    html += '<div class="btn-row"><button class="btn" data-action="checkin-manual">🖼️ 生成这张图</button></div>';
+    html += '<p class="muted small">答对数和正确率自动计算。生成后同样可以保存 PNG 或直接截图。</p>';
+    html += '</div></details>';
     return html;
   }
 
