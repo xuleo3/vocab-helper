@@ -121,8 +121,9 @@ const App = (function () {
     if (wangluPlayer.playing) {
       if (!document.getElementById('wordList') || idsNow.join(',') !== wangluPlayer.ids.join(',')) wangluStop();
     } else if (idsNow.join(',') !== wangluPlayer.ids.join(',')) {
-      wangluPlayer.ids = idsNow; wangluPlayer.idx = 0; wangluPlayer.paused = false; wangluSetUI();
+      wangluPlayer.ids = idsNow; wangluPlayer.idx = 0; wangluPlayer.paused = false;
     }
+    wangluSetUI();
     const wgSel = document.getElementById('wangluGap');
     if (wgSel && !wgSel.dataset.boundW) { wgSel.dataset.boundW = '1'; wgSel.addEventListener('change', function () { Store.setSettings({ wangluGap: Number(wgSel.value) || 0 }); }); }
     const wSeek = document.getElementById('wangluSeek');
@@ -990,7 +991,7 @@ const App = (function () {
 
   // 王陆语料库：整单元连续朗读
   function wangluFloatUpdate() {
-    const active = (wangluPlayer.playing || wangluPlayer.paused) && wangluPlayer.ids.length && current.view === 'study';
+    const active = !!wangluPlayer.ids.length && current.view === 'study' && !!document.getElementById('wordList');
     let el = document.getElementById('wangluFloat');
     if (!active) { if (el) el.remove(); return; }
     if (!el) {
@@ -1001,7 +1002,7 @@ const App = (function () {
       document.body.appendChild(el);
     }
     const btn = document.getElementById('wangluFloatToggle');
-    if (btn) btn.textContent = wangluPlayer.playing ? '⏸ 暂停' : '▶ 继续';
+    if (btn) btn.textContent = wangluPlayer.playing ? '⏸ 暂停' : (wangluPlayer.paused ? '▶ 继续' : '▶ 播放');
     const txt = document.getElementById('wangluFloatTxt');
     if (txt) {
       const i = Math.min(wangluPlayer.idx, wangluPlayer.ids.length - 1);
