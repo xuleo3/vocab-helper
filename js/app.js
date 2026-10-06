@@ -11,7 +11,7 @@ const App = (function () {
   let studySearchTimer = null;
 
   function go(view, params) {
-    if (view !== 'study') wangluStop();
+    if (view !== 'study') { wangluStop(); const wf = document.getElementById('wangluFloat'); if (wf) wf.remove(); }
     current = { view: view, params: params || {} };
     render();
     window.scrollTo(0, 0);
@@ -710,6 +710,7 @@ const App = (function () {
     },
     'checkin-preview': function (el) { UI.closeModal(); openCheckin(el.dataset.idx); },
     'checkin-image': function (el) { saveCheckinImage(el.dataset.idx); },
+    'wanglu-toggle': function () { wangluToggle(); },
     'wanglu-play': function () { wangluStart(); },
     'wanglu-pause': function () { wangluPause(); },
     'wanglu-stop': function () { wangluStop(); },
@@ -988,8 +989,29 @@ const App = (function () {
   }
 
   // 王陆语料库：整单元连续朗读
+  function wangluFloatUpdate() {
+    const active = (wangluPlayer.playing || wangluPlayer.paused) && wangluPlayer.ids.length && current.view === 'study';
+    let el = document.getElementById('wangluFloat');
+    if (!active) { if (el) el.remove(); return; }
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'wangluFloat';
+      el.className = 'wanglu-float';
+      el.innerHTML = '<button class="btn btn-sm" data-action="wanglu-toggle" id="wangluFloatToggle">⏸ 暂停</button><span class="wanglu-float-txt" id="wangluFloatTxt"></span><button class="btn btn-sm" data-action="wanglu-stop">⏹ 停止</button>';
+      document.body.appendChild(el);
+    }
+    const btn = document.getElementById('wangluFloatToggle');
+    if (btn) btn.textContent = wangluPlayer.playing ? '⏸ 暂停' : '▶ 继续';
+    const txt = document.getElementById('wangluFloatTxt');
+    if (txt) {
+      const i = Math.min(wangluPlayer.idx, wangluPlayer.ids.length - 1);
+      const w = Store.getWord(wangluPlayer.ids[i]);
+      txt.textContent = (i + 1) + '/' + wangluPlayer.ids.length + (w ? ' ' + w.headword : '');
+    }
+  }
   function wangluGapMs() { const g = Number((Store.getState().settings || {}).wangluGap); return (isFinite(g) && g > 0) ? g * 1000 : 0; }
   function wangluSetUI() {
+    try { wangluFloatUpdate(); } catch (e) {}
     const el = document.getElementById('wangluProgress');
     const sl = document.getElementById('wangluSeek');
     const lb = document.getElementById('wangluSeekLabel');

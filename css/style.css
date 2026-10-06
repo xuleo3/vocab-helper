@@ -577,3 +577,9 @@ button { -webkit-tap-highlight-color: transparent; }
 /* ---- 王陆连续朗读：进度条 ---- */
 .wanglu-seek { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
 .wanglu-seek input[type=range] { flex: 1; }
+
+/* ---- 王陆连续朗读：固定悬浮控制条 ---- */
+.wanglu-float { position: fixed; z-index: 95; right: 14px; bottom: 18px; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 999px; background: rgba(15,23,42,.94); color: #fff; box-shadow: 0 10px 26px rgba(0,0,0,.28); font-size: 12px; }
+.wanglu-float .btn { background: #fff; color: #0f172a; border: none; }
+.wanglu-float-txt { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #e2e8f0; }
+@media (max-width: 900px) { .wanglu-float { bottom: calc(78px + env(safe-area-inset-bottom)); right: 10px; padding: 7px 10px; } .wanglu-float-txt { max-width: 120px; } }
