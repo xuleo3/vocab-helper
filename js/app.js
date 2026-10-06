@@ -712,6 +712,22 @@ const App = (function () {
     'checkin-preview': function (el) { UI.closeModal(); openCheckin(el.dataset.idx); },
     'checkin-image': function (el) { saveCheckinImage(el.dataset.idx); },
     'wanglu-toggle': function () { wangluToggle(); },
+    'wanglu-play-green': function () { wangluStart(true); },
+    'wanglu-green': function (el) {
+      const wid = el.dataset.wid || (function () { const ids = wangluPlayer.ids; const w = Store.getWord(ids[Math.min(wangluPlayer.idx, ids.length - 1)]); return w ? w.id : ''; })();
+      if (!wid) return;
+      const on = Store.toggleWangluGreen(wid);
+      UI.toast(on ? '已标绿 🟢' : '已取消绿色标记');
+      render();
+    },
+    'wanglu-green-clear': function () {
+      const ids = (Views.getBrowseWordIds ? Views.getBrowseWordIds() : []) || [];
+      const n = ids.filter(function (id) { return Store.isWangluGreen(id); }).length;
+      if (!n) { UI.toast('本单元还没有标绿的单词'); return; }
+      UI.confirmBox('清空绿色标记', '确定清空本单元 ' + n + ' 个绿色标记吗？', function () {
+        Store.clearWangluGreen(ids); UI.toast('已清空本单元绿色标记'); render();
+      }, { yesText: '清空' });
+    },
     'wanglu-play': function () { wangluStart(); },
     'wanglu-pause': function () { wangluPause(); },
     'wanglu-stop': function () { wangluStop(); },
@@ -998,11 +1014,18 @@ const App = (function () {
       el = document.createElement('div');
       el.id = 'wangluFloat';
       el.className = 'wanglu-float';
-      el.innerHTML = '<button class="btn btn-sm" data-action="wanglu-toggle" id="wangluFloatToggle">⏸ 暂停</button><span class="wanglu-float-txt" id="wangluFloatTxt"></span><button class="btn btn-sm" data-action="wanglu-stop">⏹ 停止</button>';
+      el.innerHTML = '<button class="btn btn-sm" data-action="wanglu-toggle" id="wangluFloatToggle">⏸ 暂停</button><button class="btn btn-sm" data-action="wanglu-green" id="wangluFloatGreen">⚪ 标绿</button><span class="wanglu-float-txt" id="wangluFloatTxt"></span><button class="btn btn-sm" data-action="wanglu-stop">⏹ 停止</button>';
       document.body.appendChild(el);
     }
     const btn = document.getElementById('wangluFloatToggle');
     if (btn) btn.textContent = wangluPlayer.playing ? '⏸ 暂停' : (wangluPlayer.paused ? '▶ 继续' : '▶ 播放');
+    const gb = document.getElementById('wangluFloatGreen');
+    if (gb) {
+      const wcur = Store.getWord(wangluPlayer.ids[Math.min(wangluPlayer.idx, wangluPlayer.ids.length - 1)]);
+      const isG = !!(wcur && Store.isWangluGreen(wcur.id));
+      gb.textContent = isG ? '🟢 取消绿' : '⚪ 标绿';
+      gb.dataset.wid = wcur ? wcur.id : '';
+    }
     const txt = document.getElementById('wangluFloatTxt');
     if (txt) {
       const i = Math.min(wangluPlayer.idx, wangluPlayer.ids.length - 1);
@@ -1073,20 +1096,25 @@ const App = (function () {
       }
     });
   }
-  function wangluStart() {
+  function wangluStart(greenOnly) {
     if (wangluPlayer.playing) return; // 正在播放时忽略（避免空格/按钮把它从头重播）
     const lp = document.getElementById('wangluLoop');
     wangluPlayer.loop = !!(lp && lp.checked);
     // 已暂停：从当前单词继续；否则从头开始
-    if (wangluPlayer.paused && wangluPlayer.ids.length) {
+    if (!greenOnly && wangluPlayer.paused && wangluPlayer.ids.length) {
       wangluPlayer.paused = false;
       wangluPlayer.playing = true;
       wangluPlayer.token++;
       wangluPlayFrom(Math.min(wangluPlayer.idx, wangluPlayer.ids.length - 1));
       return;
     }
-    const ids = (Views.getBrowseWordIds ? Views.getBrowseWordIds() : []) || [];
+    let ids = (Views.getBrowseWordIds ? Views.getBrowseWordIds() : []) || [];
     if (!ids.length) { UI.toast('这个单元没有单词', 'error'); return; }
+    if (greenOnly) {
+      const g = ids.filter(function (id) { return Store.isWangluGreen(id); });
+      if (!g.length) { UI.toast('本单元还没有标绿的单词：听的时候点 🟢 就能标绿', 'error'); return; }
+      ids = g;
+    }
     wangluPlayer.ids = ids;
     wangluPlayer.idx = 0;
     wangluPlayer.paused = false;

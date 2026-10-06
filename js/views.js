@@ -225,6 +225,9 @@ const Views = (function () {
       html += '<button class="btn btn-primary" data-action="wanglu-play">▶ 播放 / 继续</button>';
       html += '<button class="btn" data-action="wanglu-pause">⏸ 暂停</button>';
       html += '<button class="btn" data-action="wanglu-stop">⏹ 停止</button>';
+      const greenCount = lastBrowseWids.filter(function (id) { return Store.isWangluGreen(id); }).length;
+      html += '<button class="btn" data-action="wanglu-play-green">▶ 只听绿色（' + greenCount + '）</button>';
+      html += '<button class="btn" data-action="wanglu-green-clear">🧹 清空绿色</button>';
       html += '<label class="check"><input type="checkbox" id="wangluLoop"> 循环本单元</label>';
       html += '<label class="muted small">倍速 <select class="input" id="wangluRate" style="width:auto;display:inline-block;padding:2px 6px">' + [0.6, 0.8, 1, 1.2, 1.5].map(function (x) { return '<option value="' + x + '"' + (Number(rate) === x ? ' selected' : '') + '>' + x + 'x</option>'; }).join('') + '</select></label>';
       const gap = (S().settings.wangluGap != null) ? S().settings.wangluGap : 1;
@@ -246,9 +249,11 @@ const Views = (function () {
       if (typing) {
         const _zh = (w.senses && w.senses[0] && w.senses[0].meaning) || '';
         const _al = (w.aliases && w.aliases.length) ? w.aliases.join('；') : '';
-        html += '<div class="word-row typing-row" data-wid="' + esc(w.id) + '">' +
+        const _g2 = book.kind === 'listening' && Store.isWangluGreen(w.id);
+        html += '<div class="word-row typing-row' + (_g2 ? ' row-green' : '') + '" data-wid="' + esc(w.id) + '">' +
           '<div class="word-row-main"><span class="word-mean typing-zh">' + esc(_zh) + '</span></div>' +
           '<div class="word-row-side typing-side">' +
+          (book.kind === 'listening' ? '<button class="btn btn-sm green-btn' + (_g2 ? ' on' : '') + '" data-action="wanglu-green" data-wid="' + esc(w.id) + '">' + (_g2 ? '🟢' : '⚪') + '</button>' : '') +
           '<input class="input typing-in" data-wid="' + esc(w.id) + '" placeholder="打英文" autocomplete="off" spellcheck="false">' +
           '<button class="btn btn-sm btn-primary" data-action="typing-check" data-wid="' + esc(w.id) + '">检查</button>' +
           '</div>' +
@@ -256,7 +261,8 @@ const Views = (function () {
           '</div>';
       } else {
         const mastered = !!S().mastered[w.id];
-        html += '<div class="word-row" data-action="word-detail" data-wid="' + esc(w.id) + '">' +
+        const _green = book.kind === 'listening' && Store.isWangluGreen(w.id);
+        html += '<div class="word-row' + (_green ? ' row-green' : '') + '" data-action="word-detail" data-wid="' + esc(w.id) + '">' +
           '<div class="word-row-main">' +
           '<span class="word-h">' + esc(w.headword) + '</span>' +
           (w.phonetic ? '<span class="phonetic">' + esc(w.phonetic) + '</span>' : '') +
@@ -264,6 +270,7 @@ const Views = (function () {
           '<span class="word-mean">' + UI.meaningPreview(w) + '</span>' +
           '</div>' +
           '<div class="word-row-side">' + (mastered ? '<span class="tag tag-green">已掌握</span>' : '') +
+          (book.kind === 'listening' ? '<button class="btn btn-sm green-btn' + (_green ? ' on' : '') + '" data-action="wanglu-green" data-wid="' + esc(w.id) + '">' + (_green ? '🟢' : '⚪') + '</button>' : '') +
           '<input class="input row-type-in" data-wid="' + esc(w.id) + '" placeholder="打一遍" autocomplete="off" spellcheck="false">' +
           UI.speakBtn(w) + '<span class="row-type-fb" data-rid="' + esc(w.id) + '"></span></div>' +
           '</div>';

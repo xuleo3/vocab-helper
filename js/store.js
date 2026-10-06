@@ -11,6 +11,7 @@ const Store = (function () {
       books: [],        // [{id,name,examType,source,units,wordIds,createdAt}]
       errorBooks: [],   // [{id,bookId,parentId,kind,name,round,words:{wid:{wrongCount,missedSenses:[],firstAt,lastAt,mastered}},createdAt}]
       frequent: { words: {} },  // wid -> {wrongCount,firstAt,lastAt,manual}
+      wangluGreen: {},   // 王陆听力：标绿的单词 wid -> ts
       important: { words: {} },  // 重要单词本：wid -> {addedAt}
       testSessions: {},  // 进行中的测试会话：key -> {scope, answered, startedAt, updatedAt}
       testRecords: [],   // 测试记录（用于生成打卡图）：{time,bookName,unitName,total,correct,wrong}
@@ -47,6 +48,7 @@ const Store = (function () {
     state.stats = Object.assign(d.stats, state.stats || {});
     state.wordStats = state.wordStats || {};
     state.frequent = state.frequent || { words: {} };
+    state.wangluGreen = state.wangluGreen || {};
     state.important = state.important || { words: {} };
     state.testSessions = state.testSessions || {};
     state.testRecords = state.testRecords || [];
@@ -384,6 +386,21 @@ const Store = (function () {
   }
   function getTestRecords() { return state.testRecords || []; }
 
+  // ---------- 王陆听力：绿色标记 ----------
+  function isWangluGreen(wid) { return !!(state.wangluGreen && state.wangluGreen[wid]); }
+  function toggleWangluGreen(wid, on) {
+    state.wangluGreen = state.wangluGreen || {};
+    const next = (typeof on === 'boolean') ? on : !state.wangluGreen[wid];
+    if (next) state.wangluGreen[wid] = Date.now(); else delete state.wangluGreen[wid];
+    save();
+    return next;
+  }
+  function clearWangluGreen(ids) {
+    state.wangluGreen = state.wangluGreen || {};
+    (ids || Object.keys(state.wangluGreen)).forEach(function (id) { delete state.wangluGreen[id]; });
+    save();
+  }
+
   function markMastered(wid, on) {
     if (on) state.mastered[wid] = Date.now(); else delete state.mastered[wid];
     save();
@@ -606,7 +623,7 @@ const Store = (function () {
     state.books = state.books.filter(x => x.id !== bookId);
     state.errorBooks = state.errorBooks.filter(x => x.bookId !== bookId);
     Object.keys(state.frequent.words).forEach(wid => { if (ids.includes(wid)) delete state.frequent.words[wid]; });
-    ids.forEach(id => { delete state.answerAliases[id]; delete state.answerEn[id]; });
+    ids.forEach(id => { delete state.answerAliases[id]; delete state.answerEn[id]; delete state.wangluGreen[id]; });
     save();
   }
 
@@ -664,6 +681,7 @@ const Store = (function () {
       errorBooks: state.errorBooks,
       important: state.important,
       frequent: state.frequent,
+      wangluGreen: state.wangluGreen,
       wordStats: state.wordStats,
       testSessions: state.testSessions,
       testRecords: state.testRecords,
@@ -678,7 +696,7 @@ const Store = (function () {
   function importSyncData(json) {
     const parsed = JSON.parse(json);
     if (!parsed || parsed.syncVersion !== 2) throw new Error('不是有效的云同步数据');
-    ['mastered', 'errorBooks', 'important', 'frequent', 'wordStats', 'testSessions', 'testRecords', 'answerAliases', 'answerEn', 'stats', 'settings', 'activity'].forEach(function (k) {
+    ['mastered', 'errorBooks', 'important', 'frequent', 'wangluGreen', 'wordStats', 'testSessions', 'testRecords', 'answerAliases', 'answerEn', 'stats', 'settings', 'activity'].forEach(function (k) {
       if (parsed[k] !== undefined) state[k] = parsed[k];
     });
     saveQuiet();
@@ -700,6 +718,7 @@ const Store = (function () {
     getFrequentWords, childrenOf, totalWrong, getErrorBookCounts,
     ensureErrorBook, newSubErrorBook, recordTest, removeErrorWord, clearErrorBook,
     toggleFrequent, removeFrequent, markMastered, addActivity,
+    isWangluGreen, toggleWangluGreen, clearWangluGreen,
     toggleImportant, removeImportant, getImportantWords,
     unitNameOf, getUnitIdByName,
     recordWrongWord, markCorrectWord, bumpWordStats, finishTestStats,
