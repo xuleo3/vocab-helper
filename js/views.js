@@ -227,8 +227,12 @@ const Views = (function () {
       html += '<button class="btn" data-action="wanglu-stop">⏹ 停止</button>';
       html += '<label class="check"><input type="checkbox" id="wangluLoop"> 循环本单元</label>';
       html += '<label class="muted small">倍速 <select class="input" id="wangluRate" style="width:auto;display:inline-block;padding:2px 6px">' + [0.6, 0.8, 1, 1.2, 1.5].map(function (x) { return '<option value="' + x + '"' + (Number(rate) === x ? ' selected' : '') + '>' + x + 'x</option>'; }).join('') + '</select></label>';
+      const gap = (S().settings.wangluGap != null) ? S().settings.wangluGap : 1;
+      html += '<label class="muted small">间隔 <select class="input" id="wangluGap" style="width:auto;display:inline-block;padding:2px 6px">' + [0, 0.5, 1, 1.5, 2, 3, 5].map(function (x) { return '<option value="' + x + '"' + (Number(gap) === x ? ' selected' : '') + '>' + x + '秒</option>'; }).join('') + '</select></label>';
       html += '<span class="muted small" id="wangluProgress">按 ▶ 开始</span>';
-      html += '</div></div>';
+      html += '</div>';
+      html += '<div class="wanglu-seek"><input type="range" id="wangluSeek" min="1" max="' + Math.max(1, lastBrowseWids.length) + '" value="1" step="1"><span class="muted small" id="wangluSeekLabel">拖动选择起点</span></div>';
+      html += '</div>';
     }
     html += '<div class="study-toolbar"><input type="search" id="studySearch" class="input" placeholder="搜索英文、中文或音标…" value="' + esc(browseState.query) + '"><span class="muted small">' + (kw ? '找到 ' + filtered.length + ' / ' : '') + words.length + ' 词</span></div>';
     html += '<div class="word-list" id="wordList">';

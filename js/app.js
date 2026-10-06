@@ -6,7 +6,7 @@ const App = (function () {
   let current = { view: 'dashboard', params: {} };
   let lastQuizSpoken = -2;
   const REVERSE_BOOKS = ['cet6', 'ship'];
-  const wangluPlayer = { ids: [], idx: 0, playing: false, paused: false, loop: false, token: 0 };
+  const wangluPlayer = { ids: [], idx: 0, playing: false, paused: false, loop: false, token: 0, gapTimer: null };
   let lastCheckinRecord = null;
   let studySearchTimer = null;
 
@@ -117,9 +117,24 @@ const App = (function () {
     if (wlLoop && !wlLoop.dataset.boundW) { wlLoop.dataset.boundW = '1'; wlLoop.addEventListener('change', function () { wangluPlayer.loop = wlLoop.checked; wangluSetUI(); }); }
     const wlRate = document.getElementById('wangluRate');
     if (wlRate && !wlRate.dataset.boundW) { wlRate.dataset.boundW = '1'; wlRate.addEventListener('change', function () { Store.setSettings({ wangluRate: Number(wlRate.value) || 1 }); }); }
+    const idsNow = (Views.getBrowseWordIds ? Views.getBrowseWordIds() : []) || [];
     if (wangluPlayer.playing) {
-      const idsNow = (Views.getBrowseWordIds ? Views.getBrowseWordIds() : []) || [];
       if (!document.getElementById('wordList') || idsNow.join(',') !== wangluPlayer.ids.join(',')) wangluStop();
+    } else if (idsNow.join(',') !== wangluPlayer.ids.join(',')) {
+      wangluPlayer.ids = idsNow; wangluPlayer.idx = 0; wangluPlayer.paused = false; wangluSetUI();
+    }
+    const wgSel = document.getElementById('wangluGap');
+    if (wgSel && !wgSel.dataset.boundW) { wgSel.dataset.boundW = '1'; wgSel.addEventListener('change', function () { Store.setSettings({ wangluGap: Number(wgSel.value) || 0 }); }); }
+    const wSeek = document.getElementById('wangluSeek');
+    if (wSeek && !wSeek.dataset.boundW) {
+      wSeek.dataset.boundW = '1';
+      wSeek.addEventListener('input', function () {
+        const ids = wangluPlayer.ids; if (!ids.length) return;
+        const i = Math.max(0, Math.min(ids.length - 1, (Number(wSeek.value) || 1) - 1));
+        const w = Store.getWord(ids[i]); const lb = document.getElementById('wangluSeekLabel');
+        if (lb) lb.textContent = '第 ' + (i + 1) + ' / ' + ids.length + '：' + (w ? w.headword : '');
+      });
+      wSeek.addEventListener('change', function () { wangluSeekTo(wSeek.value); });
     }
     document.querySelectorAll('.row-type-in').forEach(function (inp) {
       if (!inp.dataset.boundR) {
@@ -973,8 +988,22 @@ const App = (function () {
   }
 
   // 王陆语料库：整单元连续朗读
+  function wangluGapMs() { const g = Number((Store.getState().settings || {}).wangluGap); return (isFinite(g) && g > 0) ? g * 1000 : 0; }
   function wangluSetUI() {
     const el = document.getElementById('wangluProgress');
+    const sl = document.getElementById('wangluSeek');
+    const lb = document.getElementById('wangluSeekLabel');
+    const ids = wangluPlayer.ids;
+    if (sl) {
+      const total = ids.length || Number(sl.max) || 1;
+      sl.max = total;
+      if (ids.length) sl.value = String(Math.min(total, wangluPlayer.idx + 1));
+    }
+    if (lb) {
+      const i = ids.length ? Math.min(ids.length - 1, wangluPlayer.idx) : 0;
+      const w = ids.length ? Store.getWord(ids[i]) : null;
+      lb.textContent = ids.length ? ('第 ' + (i + 1) + ' / ' + ids.length + '：' + (w ? w.headword : '')) : '拖动选择起点';
+    }
     if (!el) return;
     if (wangluPlayer.playing) el.textContent = '朗读中 ' + (wangluPlayer.idx + 1) + ' / ' + wangluPlayer.ids.length + (wangluPlayer.loop ? ' · 循环' : '') + '（空格暂停）';
     else if (wangluPlayer.paused) el.textContent = '已暂停 ' + (wangluPlayer.idx + 1) + ' / ' + wangluPlayer.ids.length + '（空格继续）';
@@ -1007,7 +1036,17 @@ const App = (function () {
       rate: rate,
       onend: function () {
         if (!wangluPlayer.playing || myToken !== wangluPlayer.token) return;
-        wangluPlayFrom(i + 1);
+        const gap = wangluGapMs();
+        if (gap > 0) {
+          if (wangluPlayer.gapTimer) clearTimeout(wangluPlayer.gapTimer);
+          wangluPlayer.gapTimer = setTimeout(function () {
+            wangluPlayer.gapTimer = null;
+            if (!wangluPlayer.playing || myToken !== wangluPlayer.token) return;
+            wangluPlayFrom(i + 1);
+          }, gap);
+        } else {
+          wangluPlayFrom(i + 1);
+        }
       }
     });
   }
@@ -1034,6 +1073,23 @@ const App = (function () {
     if (ae && ae.tagName === 'BUTTON' && ae.dataset && /^wanglu-/.test(ae.dataset.action || '')) { try { ae.blur(); } catch (e) {} }
     wangluPlayFrom(0);
   }
+  function wangluSeekTo(v) {
+    const ids = (wangluPlayer.ids && wangluPlayer.ids.length) ? wangluPlayer.ids : ((Views.getBrowseWordIds ? Views.getBrowseWordIds() : []) || []);
+    if (!ids.length) return;
+    wangluPlayer.ids = ids;
+    const i = Math.max(0, Math.min(ids.length - 1, (Number(v) || 1) - 1));
+    wangluPlayer.idx = i;
+    if (wangluPlayer.gapTimer) { clearTimeout(wangluPlayer.gapTimer); wangluPlayer.gapTimer = null; }
+    if (wangluPlayer.playing) {
+      wangluPlayer.token++;
+      Speech.stop();
+      wangluPlayFrom(i);
+    } else {
+      const w = Store.getWord(ids[i]);
+      if (w) wangluHighlight(w.id);
+      wangluSetUI();
+    }
+  }
   function wangluToggle() {
     if (wangluPlayer.playing) { wangluPause(); return; }
     if (wangluPlayer.paused && wangluPlayer.ids.length) { wangluStart(); return; }
@@ -1042,6 +1098,7 @@ const App = (function () {
   }
   function wangluPause() {
     if (!wangluPlayer.playing) return;
+    if (wangluPlayer.gapTimer) { clearTimeout(wangluPlayer.gapTimer); wangluPlayer.gapTimer = null; }
     const ae = document.activeElement;
     if (ae && ae.tagName === 'BUTTON' && ae.dataset && /^wanglu-/.test(ae.dataset.action || '')) { try { ae.blur(); } catch (e) {} }
     wangluPlayer.playing = false;
@@ -1055,6 +1112,7 @@ const App = (function () {
     wangluPlayer.playing = false;
     wangluPlayer.paused = false;
     wangluPlayer.token++;
+    if (wangluPlayer.gapTimer) { clearTimeout(wangluPlayer.gapTimer); wangluPlayer.gapTimer = null; }
     Speech.stop();
     wangluPlayer.idx = 0;
     wangluPlayer.ids = [];
