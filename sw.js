@@ -2,25 +2,25 @@
 // Service Worker：网络优先 + 缓存兜底（离线可用）
 // 版本号跟随资源版本，改动文件后记得同步递增
 // ============================================================
-const CACHE = 'vocab-helper-v65';
+const CACHE = 'vocab-helper-v66';
 const ASSETS = [
   './',
   './index.html',
   './manifest.webmanifest',
-  './css/style.css?v=65',
-  './js/data.js?v=65',
-  './js/wanglu_data.js?v=65',
-  './js/ship_data.js?v=65',
-  './js/oral_data.js?v=65',
-  './js/store.js?v=65',
-  './js/cloud.js?v=65',
-  './js/speech.js?v=65',
-  './js/importer.js?v=65',
-  './js/ui.js?v=65',
-  './js/scene_data.js?v=65',
-  './js/scene.js?v=65',
-  './js/views.js?v=65',
-  './js/app.js?v=65',
+  './css/style.css?v=66',
+  './js/data.js?v=66',
+  './js/wanglu_data.js?v=66',
+  './js/ship_data.js?v=66',
+  './js/oral_data.js?v=66',
+  './js/store.js?v=66',
+  './js/cloud.js?v=66',
+  './js/speech.js?v=66',
+  './js/importer.js?v=66',
+  './js/ui.js?v=66',
+  './js/scene_data.js?v=66',
+  './js/scene.js?v=66',
+  './js/views.js?v=66',
+  './js/app.js?v=66',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-180.png'

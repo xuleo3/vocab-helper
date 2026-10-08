@@ -66,14 +66,16 @@ const Speech = (function () {
     }
 
     let started = false, finished = false;
+    let resumeTimer = null;
+    const clearResume = function () { if (resumeTimer) { clearInterval(resumeTimer); resumeTimer = null; } };
     const u = new SpeechSynthesisUtterance(text);
     u.lang = lang;
     u.rate = Math.max(0.5, Math.min(2, Number(rate) || 1));
     const v = pickVoice(settings.ttsLang);
     if (v) u.voice = v;
     u.onstart = function () { started = true; };
-    u.onend = function () { finished = true; done(); };
-    u.onerror = function () { if (mySeq === seq && !started) playFallback(text, { rate: rate, onend: done }); };
+    u.onend = function () { finished = true; clearResume(); done(); };
+    u.onerror = function () { clearResume(); if (mySeq === seq && !started) playFallback(text, { rate: rate, onend: done }); };
 
     try {
       speechSynthesis.speak(u);
@@ -84,9 +86,15 @@ const Speech = (function () {
 
     setTimeout(function () {
       if (mySeq !== seq || started || finished) return;
+      clearResume();
       try { speechSynthesis.cancel(); } catch (e) {}
       playFallback(text, { rate: rate, onend: done });
     }, 1800);
+    // 每 1 秒给语音引擎续命一次（Chrome/Edge 长时间朗读会自动 paused）
+    resumeTimer = setInterval(function () {
+      if (mySeq !== seq || finished) { clearResume(); return; }
+      try { speechSynthesis.resume(); } catch (e) {}
+    }, 1000);
     setTimeout(function () {
       if (mySeq === seq && !finished) { try { speechSynthesis.resume(); } catch (e) {} }
     }, 600);
