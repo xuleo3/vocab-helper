@@ -1134,19 +1134,25 @@ const App = (function () {
     }
     let ids = (Views.getBrowseWordIds ? Views.getBrowseWordIds() : []) || [];
     if (!ids.length) { UI.toast('这个单元没有单词', 'error'); return; }
+    // 记住进度条选的起点：同一个单元列表时从选中的词开始，不回到第一个
+    let startIdx = 0;
+    if (wangluPlayer.ids.length && wangluPlayer.ids.join(',') === ids.join(',')) {
+      startIdx = Math.max(0, Math.min(ids.length - 1, wangluPlayer.idx || 0));
+    }
     if (greenOnly) {
       const g = ids.filter(function (id) { return Store.isWangluGreen(id); });
       if (!g.length) { UI.toast('本单元还没有标绿的单词：听的时候点 🟢 就能标绿', 'error'); return; }
       ids = g;
+      startIdx = 0;
     }
     wangluPlayer.ids = ids;
-    wangluPlayer.idx = 0;
+    wangluPlayer.idx = startIdx;
     wangluPlayer.paused = false;
     wangluPlayer.playing = true;
     wangluPlayer.token++;
     const ae = document.activeElement;
     if (ae && ae.tagName === 'BUTTON' && ae.dataset && /^wanglu-/.test(ae.dataset.action || '')) { try { ae.blur(); } catch (e) {} }
-    wangluPlayFrom(0);
+    wangluPlayFrom(startIdx);
   }
   function wangluSeekTo(v) {
     const ids = (wangluPlayer.ids && wangluPlayer.ids.length) ? wangluPlayer.ids : ((Views.getBrowseWordIds ? Views.getBrowseWordIds() : []) || []);
