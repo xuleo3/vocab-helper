@@ -6,7 +6,7 @@ const App = (function () {
   let current = { view: 'dashboard', params: {} };
   let lastQuizSpoken = -2;
   const REVERSE_BOOKS = ['cet6', 'ship'];
-  const wangluPlayer = { ids: [], idx: 0, playing: false, paused: false, loop: false, token: 0, gapTimer: null };
+  const wangluPlayer = { ids: [], idx: 0, playing: false, paused: false, loop: false, token: 0, gapTimer: null, watchTimer: null };
   let lastCheckinRecord = null;
   let studySearchTimer = null;
 
@@ -1078,23 +1078,47 @@ const App = (function () {
     const myToken = ++wangluPlayer.token;
     wangluSetUI();
     const rate = Number((Store.getState().settings || {}).wangluRate) || 1;
-    Speech.speakWord(w, {
-      rate: rate,
-      onend: function () {
-        if (!wangluPlayer.playing || myToken !== wangluPlayer.token) return;
-        const gap = wangluGapMs();
-        if (gap > 0) {
-          if (wangluPlayer.gapTimer) clearTimeout(wangluPlayer.gapTimer);
-          wangluPlayer.gapTimer = setTimeout(function () {
-            wangluPlayer.gapTimer = null;
-            if (!wangluPlayer.playing || myToken !== wangluPlayer.token) return;
-            wangluPlayFrom(i + 1);
-          }, gap);
-        } else {
+    const finished = function () {
+      if (wangluPlayer.watchTimer) { clearTimeout(wangluPlayer.watchTimer); wangluPlayer.watchTimer = null; }
+      if (!wangluPlayer.playing || myToken !== wangluPlayer.token) return;
+      const gap = wangluGapMs();
+      if (gap > 0) {
+        if (wangluPlayer.gapTimer) clearTimeout(wangluPlayer.gapTimer);
+        wangluPlayer.gapTimer = setTimeout(function () {
+          wangluPlayer.gapTimer = null;
+          if (!wangluPlayer.playing || myToken !== wangluPlayer.token) return;
           wangluPlayFrom(i + 1);
-        }
+        }, gap);
+      } else {
+        wangluPlayFrom(i + 1);
       }
-    });
+    };
+    // 看门狗：只有当“网络音频 + 系统语音”都失败时才会触发，作为最后保险
+    if (wangluPlayer.watchTimer) clearTimeout(wangluPlayer.watchTimer);
+    const estMs = Math.min(25000, Math.max(6000, 3000 + String(w.headword || '').length * 200)) / Math.max(0.5, Number(rate) || 1) + wangluGapMs() + 3000;
+    wangluPlayer.watchTimer = setTimeout(function () {
+      wangluPlayer.watchTimer = null;
+      if (!wangluPlayer.playing || myToken !== wangluPlayer.token) return;
+      try { Speech.stop(); } catch (e) {}
+      if (wangluPlayer.gapTimer) { clearTimeout(wangluPlayer.gapTimer); wangluPlayer.gapTimer = null; }
+    if (wangluPlayer.watchTimer) { clearTimeout(wangluPlayer.watchTimer); wangluPlayer.watchTimer = null; }
+      if (window.UI) UI.toast('“' + w.headword + '”播放失败，已跳到下一个（请把这个词告诉开发者）', 'error');
+      wangluPlayFrom(i + 1);
+    }, estMs);
+    // 优先用网络音频（国内可直连，天然没有浏览器语音队列卡死问题）
+    const useTts = function () { Speech.speakWord(w, { rate: rate, onend: finished }); };
+    if (typeof Speech.playNetwork === 'function') {
+      Speech.playNetwork(w.headword, { rate: rate, onend: finished, onfail: useTts });
+    } else {
+      useTts();
+    }
+    // 预加载后面 3 个词，播放更顺
+    if (typeof Speech.preload === 'function') {
+      for (let k = 1; k <= 3; k++) {
+        const nw = Store.getWord(ids[(i + k) % ids.length]);
+        if (nw) Speech.preload(nw.headword);
+      }
+    }
   }
   function wangluStart(greenOnly) {
     if (wangluPlayer.playing) return; // 正在播放时忽略（避免空格/按钮把它从头重播）
@@ -1131,6 +1155,7 @@ const App = (function () {
     const i = Math.max(0, Math.min(ids.length - 1, (Number(v) || 1) - 1));
     wangluPlayer.idx = i;
     if (wangluPlayer.gapTimer) { clearTimeout(wangluPlayer.gapTimer); wangluPlayer.gapTimer = null; }
+    if (wangluPlayer.watchTimer) { clearTimeout(wangluPlayer.watchTimer); wangluPlayer.watchTimer = null; }
     if (wangluPlayer.playing) {
       wangluPlayer.token++;
       Speech.stop();
@@ -1150,6 +1175,7 @@ const App = (function () {
   function wangluPause() {
     if (!wangluPlayer.playing) return;
     if (wangluPlayer.gapTimer) { clearTimeout(wangluPlayer.gapTimer); wangluPlayer.gapTimer = null; }
+    if (wangluPlayer.watchTimer) { clearTimeout(wangluPlayer.watchTimer); wangluPlayer.watchTimer = null; }
     const ae = document.activeElement;
     if (ae && ae.tagName === 'BUTTON' && ae.dataset && /^wanglu-/.test(ae.dataset.action || '')) { try { ae.blur(); } catch (e) {} }
     wangluPlayer.playing = false;
@@ -1164,6 +1190,7 @@ const App = (function () {
     wangluPlayer.paused = false;
     wangluPlayer.token++;
     if (wangluPlayer.gapTimer) { clearTimeout(wangluPlayer.gapTimer); wangluPlayer.gapTimer = null; }
+    if (wangluPlayer.watchTimer) { clearTimeout(wangluPlayer.watchTimer); wangluPlayer.watchTimer = null; }
     Speech.stop();
     wangluPlayer.idx = 0;
     wangluPlayer.ids = [];

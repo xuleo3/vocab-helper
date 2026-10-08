@@ -5,7 +5,9 @@
 const Speech = (function () {
   let voices = [];
   let fallbackAudio = null;
+  let currentAudio = null;
   let seq = 0;
+  const preloadCache = {};
 
   function refreshVoices() {
     if (typeof speechSynthesis === 'undefined') { voices = []; return; }
@@ -28,9 +30,42 @@ const Speech = (function () {
            voices.find(v => v.lang && v.lang.replace('_', '-').toLowerCase().startsWith(target.toLowerCase())) || null;
   }
 
+  // 有道词典发音（国内可直连），type=2 美音 / type=1 英音
+  function youdaoUrl(text, type) { return 'https://dict.youdao.com/dictvoice?audio=' + encodeURIComponent(text) + '&type=' + type; }
+  // 预加载（王陆连续播放用：提前把后面几个词的音频拉下来，降低卡顿）
+  function preload(text) {
+    text = String(text || '').trim();
+    if (!text || preloadCache[text]) return;
+    try { const a = new Audio(youdaoUrl(text, 2)); a.preload = 'auto'; a.load(); preloadCache[text] = a; } catch (e) {}
+  }
+  // 网络音频优先播放：美音失败自动试英音；都失败才调用 onfail
+  function playNetwork(text, opts) {
+    opts = opts || {};
+    text = String(text || '').trim();
+    if (!text) { if (opts.onfail) { try { opts.onfail(); } catch (e) {} } return; }
+    const types = [2, 1];
+    let ti = 0;
+    const attempt = function () {
+      if (ti >= types.length) { if (opts.onfail) { try { opts.onfail(); } catch (e) {} } return; }
+      const type = types[ti++];
+      let a;
+      try { a = new Audio(youdaoUrl(text, type)); } catch (e) { attempt(); return; }
+      currentAudio = a;
+      a.preload = 'auto';
+      if (opts.rate) { try { a.playbackRate = Math.max(0.5, Math.min(2, Number(opts.rate) || 1)); } catch (e) {} }
+      let done = false;
+      a.onended = function () { if (done) return; done = true; if (opts.onend) { try { opts.onend(); } catch (e) {} } };
+      a.onerror = function () { if (done) return; done = true; attempt(); };
+      const p = a.play();
+      if (p && p.catch) p.catch(function () { if (done) return; done = true; attempt(); });
+    };
+    attempt();
+  }
+
   function stopAll() {
     try { if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel(); } catch (e) {}
     try { if (fallbackAudio) { fallbackAudio.onended = null; fallbackAudio.pause(); fallbackAudio.currentTime = 0; } } catch (e) {}
+    try { if (currentAudio) { currentAudio.onended = null; currentAudio.onerror = null; currentAudio.pause(); currentAudio.currentTime = 0; } } catch (e) {}
   }
 
   function playFallback(text, opts) {
@@ -112,5 +147,5 @@ const Speech = (function () {
 
   function stop() { seq++; stopAll(); }
 
-  return { speak, speakWord, stop: stop };
+  return { speak, speakWord, playNetwork, preload, stop: stop };
 })();
